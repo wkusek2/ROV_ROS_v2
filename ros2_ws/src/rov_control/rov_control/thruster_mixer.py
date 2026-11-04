@@ -44,12 +44,19 @@ class ThrusterMixer(Node):
         p("rate_hz", 20.0); p("cmd_timeout_s", 0.5); p("default_gain", 0.3)
         p("beta_deg", al.BETA_DEG)
         p("r_cg_mm", [0.0, 0.0, 0.0])          # przesuniecie srodka masy wzgledem srodka geometrycznego [mm]
-        p("f_max_fwd", 40.0); p("f_max_rev", 30.0)   # [N] na pednik
-        p("cmd_exponent", 1.0)                  # sila = Fmax * cmd^exp (1 = liniowo, T200 ~1.6)
+        p("thrust_model", "t200")              # "t200" = krzywa T200 16 V z allocation.py, "power" = Fmax * cmd^exp
+        p("thrust_scale", 1.0)                  # mnoznik krzywej T200 (podrobki, inne napiecie) - po pomiarze
+        p("f_max_fwd", 40.0); p("f_max_rev", 30.0)   # [N] na pednik - tylko thrust_model "power"
+        p("cmd_exponent", 1.0)                  # sila = Fmax * cmd^exp - tylko thrust_model "power"
         p("weights", [1.0] * 8)                 # wagi pednikow (wieksza = mniej uzywany)
         g = lambda k: self.get_parameter(k).value  # noqa: E731
         self.timeout = float(g("cmd_timeout_s")); self.gain = float(g("default_gain"))
         self.f_fwd, self.f_rev, self.expo = float(g("f_max_fwd")), float(g("f_max_rev")), float(g("cmd_exponent"))
+        self.thrust_model = str(g("thrust_model"))
+        self.tab_fwd = self.tab_rev = None
+        if self.thrust_model == "t200":
+            self.tab_fwd, self.tab_rev = al.thrust_tables(float(g("thrust_scale")))
+            self.f_fwd, self.f_rev = self.tab_fwd[-1][1], self.tab_rev[-1][1]
 
         # ---- alokacja ----
         self.B = al.build_B(r_cg_mm=list(g("r_cg_mm")), beta_deg=float(g("beta_deg")))
@@ -58,7 +65,8 @@ class ThrusterMixer(Node):
         self.info = al.analyze(self.B)
         self.tau_max = al.dof_limits(self.Bp, self.B, self.f_fwd, self.f_rev)
         self.pure = al.verify_pure_moves(self.Bp, self.B)
-        self.get_logger().info(f"alokacja: rank={self.info['rank']} cond={self.info['cond']} tau_max={self.tau_max}")
+        self.get_logger().info(f"alokacja: rank={self.info['rank']} cond={self.info['cond']} tau_max={self.tau_max} "
+                               f"ciag={self.thrust_model} +{self.f_fwd:.1f}/-{self.f_rev:.1f} N")
         if not self.info["controllable"]:
             self.get_logger().error("macierz B nie ma rzedu 6 - nie wszystkie DOF sterowalne!")
 
@@ -126,7 +134,7 @@ class ThrusterMixer(Node):
         self.tau = [round(float(v), 3) for v in tau]
         f = al.allocate(self.Bp, tau)
         f, scale, _ = al.saturate(f, self.f_fwd, self.f_rev)
-        return al.force_to_cmd(f, self.f_fwd, self.f_rev, self.expo), f, scale
+        return al.force_to_cmd(f, self.f_fwd, self.f_rev, self.expo, self.tab_fwd, self.tab_rev), f, scale
 
     def on_config(self, m: String):
         try:
@@ -207,7 +215,7 @@ class ThrusterMixer(Node):
               "slots": self.slots,
               "test": {"desc": self.test[2], "left_s": round(self.test[1] - time.monotonic(), 1)} if self.test else None,
               "alloc": {"rank": self.info["rank"], "cond": self.info["cond"], "sv": self.info["singular_values"],
-                        "tau_max": self.tau_max, "f_max": [self.f_fwd, self.f_rev], "names": al.NAMES,
+                        "tau_max": self.tau_max, "f_max": [round(self.f_fwd, 1), round(self.f_rev, 1)], "thrust_model": self.thrust_model, "names": al.NAMES,
                         "pure": {k: {"f": v["f"], "err": v["err"], "coupling": v["coupling"]} for k, v in self.pure.items()},
                         "unassigned": [al.NAMES[i] for i in range(8) if self.motor_of[i] < 0]}}
         self.pub_status.publish(String(data=json.dumps(st)))

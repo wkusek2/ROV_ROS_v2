@@ -7,7 +7,9 @@ thruster_mixer:
     default_gain: 0.3         # gain po starcie (GUI zmienia /rov/gain)
     beta_deg: 22.4            # |theta| pednikow (pochylenie ciagu wzgledem plaszczyzny x-y)
     r_cg_mm: [0.0, 0.0, 0.0]  # srodek masy wzgledem srodka geometrycznego [mm] (FRD: x przod, y prawo, z dol)
-    f_max_fwd: 40.0           # [N] max ciag pednika do przodu
-    f_max_rev: 30.0           # [N] max ciag do tylu
-    cmd_exponent: 1.0         # sila = Fmax * |cmd|^exp; 1.0 liniowo, T200 ok. 1.6 (podmienic po pomiarze)
+    thrust_model: "t200"      # krzywa ciagu T200 @16 V z allocation.py (max +51.5 / -39.9 N), "power" = stary model ponizej
+    thrust_scale: 1.0         # mnoznik krzywej: podrobki T200 / inne napiecie (np. 0.85) - ustawic po pomiarze ciagu
+    f_max_fwd: 40.0           # [N] tylko thrust_model "power"
+    f_max_rev: 30.0           # [N] tylko thrust_model "power"
+    cmd_exponent: 1.0         # tylko "power": sila = Fmax * |cmd|^exp
     weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]   # wagi pednikow w pseudoodwrotnosci (PGL PGP TGL TGP PDL PDP TDL TDP)

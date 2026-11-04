@@ -36,24 +36,38 @@ LEGACY = {"pitch": ("M", -1), "roll": ("K", -1)}
 
 
 # ---------------- prawdziwy mikser (bez ROS) ----------------
-def make_mixer():
+def make_mixer(model="t200"):
+    """Mikser jak w thruster_mixer.__init__: "t200" (krzywa z allocation.py, domyslny w mixer.yaml) albo "linear" (stary 40/30 N)."""
     m = tmm.ThrusterMixer.__new__(tmm.ThrusterMixer)
     m.B = al.build_B(); m.Bp = al.pinv_weighted(m.B, None)
     m.f_fwd, m.f_rev, m.expo = 40.0, 30.0, 1.0
+    m.thrust_model = model; m.tab_fwd = m.tab_rev = None
+    if model == "t200":
+        m.tab_fwd, m.tab_rev = al.thrust_tables(1.0)
+        m.f_fwd, m.f_rev = m.tab_fwd[-1][1], m.tab_rev[-1][1]
     m.tau_max = al.dof_limits(m.Bp, m.B, m.f_fwd, m.f_rev)
     return m
 
 
-def mixer_forces(mixer, cmd6, gain, dof_map=None):
-    """cmd6 (semantyka GUI) -> sily 8 pednikow [N] (kolejnosc al.NAMES) przez PRAWDZIWE ThrusterMixer.allocate_cmd."""
+REAL = al.thrust_tables(1.0)      # "prawdziwe" pedniki w fizyce: krzywa T200 (razy mismatch podrobek)
+
+
+def mixer_out(mixer, cmd6, gain, dof_map=None):
+    """cmd6 (semantyka GUI) -> (sygnaly 8 pednikow -1..1, sily wg miksera [N]) przez PRAWDZIWE ThrusterMixer.allocate_cmd."""
     saved = dict(tmm.DOF_OF_AXIS)
     if dof_map:
         tmm.DOF_OF_AXIS.update(dof_map)
     try:
-        _, f, _ = tmm.ThrusterMixer.allocate_cmd(mixer, list(cmd6), gain)
+        c8, f, _ = tmm.ThrusterMixer.allocate_cmd(mixer, list(cmd6), gain)
     finally:
         tmm.DOF_OF_AXIS.clear(); tmm.DOF_OF_AXIS.update(saved)
-    return np.asarray(f)
+    return np.asarray(c8), np.asarray(f)
+
+
+def mixer_forces(mixer, cmd6, gain, dof_map=None):
+    """Sily, jakie dadza PRAWDZIWE pedniki (krzywa T200) na sygnaly z miksera."""
+    c8, _ = mixer_out(mixer, cmd6, gain, dof_map)
+    return al.cmd_to_force(c8, *REAL)
 
 
 # ---------------- prawdziwy regulator (bez ROS, zegar symulacji) ----------------
@@ -122,10 +136,11 @@ def imu_msg(R, w_frd):
     return m
 
 
-def simulate(gain, legacy=False, T=12.0, dist=(0, 0, 0), heave=None, mismatch=None, bg=0.02, level=True, yaw_hold=True):
+def simulate(gain, legacy=False, T=12.0, dist=(0, 0, 0), heave=None, mismatch=None, bg=0.02, level=True, yaw_hold=True,
+             model="t200"):
     """Pojazd w wodzie z regulatorem (poziom + kurs), pilot 0. dist: impuls momentu [Nm] FRD przez 0.5 s od t=1 s.
     heave: (t0, t1, wartosc) komenda pilota heave. mismatch[8]: wspolczynnik ciagu pednikow (podrobki). bg: CB nad CG [m]."""
-    mixer = make_mixer(); c = make_ctrl(level, yaw_hold)
+    mixer = make_mixer("linear" if legacy else model); c = make_ctrl(level, yaw_hold)
     dof_map = LEGACY if legacy else None
     k_thr = np.ones(8) if mismatch is None else np.asarray(mismatch)
     I = np.diag([0.9, 1.5, 1.8]); D = np.diag([3.0, 4.0, 4.0]); W = 250.0
@@ -264,6 +279,40 @@ def main():
     fig.suptitle("Porownanie: stary vs obecny kod. Prawdziwy filtr+PID+mikser, niezalezna fizyka (wypor 2 cm nad CG, pedniki 120 ms)", fontsize=12)
     fig.tight_layout(); fig.savefig(os.path.join(out, "2_porownanie.png"), dpi=85); plt.close(fig)
 
+    # ---- 3: model ciagu - liniowy 40/30 N (stary) vs krzywa T200, pedniki w fizyce = T200 * mismatch ----
+    fig, axs = plt.subplots(2, 2, figsize=(16, 9))
+    ax = axs[0, 0]
+    u = np.linspace(-1, 1, 201)
+    ax.plot(u, al.cmd_to_force(u, *REAL), "k", lw=2.5, label="T200 16 V (allocation.py)")
+    ax.plot(u, np.where(u >= 0, 40 * u, 30 * u), "r--", lw=1.5, label="stary model: liniowo +40/-30 N")
+    ax.plot(u, al.cmd_to_force(u, *al.thrust_tables(0.8)), "k:", lw=1, label="T200 x 0.8 (slaba podrobka)")
+    ax.set_xlabel("sygnal pednika -1..1"); ax.set_ylabel("ciag [N]"); ax.grid(alpha=0.3); ax.legend(fontsize=8)
+    ax.set_title("Krzywa ciagu", fontsize=10)
+    model_rows = []
+    for ax, (title, cmd) in zip([axs[0, 1], axs[1, 0], axs[1, 1]], [
+            ("Pilot: czyste ZANURZANIE heave -0.6", [0, 0, -0.6, 0, 0, 0]),
+            ("Pilot: czysty YAW +0.4", [0, 0, 0, 0, 0, 0.4]),
+            ("Pilot: SURGE +0.5 + heave -0.3", [0.5, 0, -0.3, 0, 0, 0])]):
+        names = ["X", "Y", "Z", "K", "M", "N"]
+        bars = []
+        for model, col in (("linear", "tab:red"), ("t200", "tab:green")):
+            mx = make_mixer(model)
+            c8, f_plan = mixer_out(mx, cmd, 1.0)
+            for k_lab, kvec in (("T200", np.ones(8)), ("podrobki 80-100%", weak)):
+                tau_real = mx.B @ (al.cmd_to_force(c8, *REAL) * kvec)
+                tau_plan = mx.B @ f_plan
+                bars.append((f"mikser {model}, pedniki {k_lab}", tau_real, tau_plan, col, 0.6 if k_lab == "T200" else 0.3))
+        x = np.arange(6); wdt = 0.2
+        for i, (lab, tr, tp, col, alpha) in enumerate(bars):
+            ax.bar(x + (i - 1.5) * wdt, tr, wdt, color=col, alpha=alpha + 0.3, label=lab, edgecolor="k", lw=0.5)
+            model_rows.append((title, lab, [round(float(v), 2) for v in tr], [round(float(v), 2) for v in tp]))
+        ax.plot(x, bars[2][2], "k_", ms=30, mew=2, label="zamierzone (plan miksera)")
+        ax.set_xticks(x); ax.set_xticklabels(["X [N]", "Y [N]", "Z [N]", "K roll [Nm]", "M pitch [Nm]", "N yaw [Nm]"])
+        ax.axhline(0, color="k", lw=0.5); ax.grid(alpha=0.3, axis="y"); ax.legend(fontsize=7)
+        ax.set_title(title + " - co faktycznie wychodzi (bez regulatora)", fontsize=10)
+    fig.suptitle("Model ciagu w mikserze: przy nieliniowych pednikach model liniowy daje inne sily niz planuje", fontsize=12)
+    fig.tight_layout(); fig.savefig(os.path.join(out, "3_model_ciagu.png"), dpi=85); plt.close(fig)
+
     with open(os.path.join(out, "wyniki.txt"), "w") as fh:
         fh.write("TESTY ZNAKOW (obecny kod)\n")
         for k, ok, txt in checks:
@@ -271,6 +320,9 @@ def main():
         fh.write("\nZAMKNIETA PETLA (max |kat|, kat koncowy, koniec symulacji; koniec < T = wywrotka > 85 st.)\n")
         for s in summary:
             fh.write("  %-11s %-6s gain %.1f %-6s max %6.1f  koniec %6.1f  t_end %5.1f s\n" % s)
+        fh.write("\nMODEL CIAGU: tau faktyczne [X Y Z K M N] vs plan miksera (bez regulatora)\n")
+        for title, lab, tr, tp in model_rows:
+            fh.write(f"  {title:38s} {lab:38s} fakt {tr}  plan {tp}\n")
     print(open(os.path.join(out, "wyniki.txt")).read())
     sys.exit(0 if all(ok for _, ok, _ in checks) else 1)
 

@@ -40,3 +40,22 @@ python3 ros2_ws/src/rov_control/test/sign_check.py docs/stabilizacja/po   # exit
 3. Przechylenie ręką prawą burtą w dół: GUI pokazuje roll **+**. Dziób w górę: pitch **+**. Obrót w lewo: yaw **+**.
 
 Jeśli punkt 3 się nie zgadza, `imu_axes` nie pasuje do montażu IMU. Trzeba je poprawić, zanim włączysz stabilizację w wodzie.
+
+# Model ciągu: krzywa T200 zamiast liniowego 40/30 N (2026-11-04)
+
+Mikser (`thrust_model: "t200"` w `config/mixer.yaml`) i `sim_pico` używają krzywej Blue Robotics T200 przy 16 V z `allocation.py`. Maksimum to +51.5 / −39.9 N.
+
+Oś sygnału jest przeliczona z PWM na nasz DShot 3D (−1..1), bez martwej strefy ±25 µs z ESC Blue Robotics. Punkty krzywej są przybliżone z wykresu producenta.
+
+`thrust_scale` mnoży całą krzywą. Służy do podróbek i innego napięcia: po pomiarze ciągu wystarczy zmienić tę jedną liczbę. Stary model jest dostępny jako `thrust_model: "power"`.
+
+Wyniki (`po_t200/3_model_ciagu.png`, liczby w `po_t200/wyniki.txt`). Pędniki w fizyce mają krzywą T200, w niektórych wariantach przemnożoną przez rozrzut podróbek 80–100%:
+- **Liniowy model, czyste zanurzanie heave −0.6:** wychodzi pasożytnicze **X = −12 N**, czyli pojazd cofa się przy schodzeniu. Z daje 46 N zamiast planowanych 55 N.
+  Przyczyna: przód i tył są niesymetryczne, a krzywa nieliniowa, więc pędniki kręcące wstecz i naprzód dają inne siły, niż zakłada mikser.
+- **Liniowy model, czysty yaw +0.4:** moment 16 Nm zamiast 24 Nm (−35%). Do tego X = −6 N.
+- **Model T200, nominalne pędniki:** faktyczne siły równe planowanym, zero sprzężeń.
+- **Rozrzut podróbek 80–100%:** przy zanurzaniu zostaje moment yaw około 1.3 Nm, pitch około 0.7 Nm i siła Y około 3 N. **To jest źródło samoczynnego obracania przy zanurzaniu.** Tego nie usunie żaden model, który zakłada identyczne pędniki. Usuwa to regulator (po poprawce znaków trzyma ±1.5°, `po_t200/2_porownanie.png`) albo pomiar i ustawienie wag lub skali dla każdego pędnika osobno.
+
+Uwaga: model T200 ma około 29% wyższe limity niż stary model 40/30 N. Ten sam gain daje teraz większe siły i momenty, także po stronie regulatora.
+
+W `po_t200/2_porownanie.png` „STARY kod” oznacza stare znaki i liniowy model ciągu, a pędniki w fizyce to T200. Liczby różnią się więc od `po/`, gdzie fizyka była liniowa.

@@ -28,6 +28,31 @@ SLOT_OF = {"PGL": "FLU", "PGP": "FRU", "TGL": "RLU", "TGP": "RRU", "PDL": "FLD",
 NAME_OF_SLOT = {v: k for k, v in SLOT_OF.items()}
 DOF = ["X", "Y", "Z", "K", "M", "N"]
 
+# Krzywa ciagu Blue Robotics T200 przy 16 V (punkty przyblizone z wykresu producenta, kgf):
+# PWM 1500 +- 400 us, martwa strefa ich ESC +-25 us. U nas sygnal -1..1 idzie liniowo w DShot 3D (BLHeli_32, bez tej
+# martwej strefy), wiec os przeliczona: u = (|PWM - 1500| - 25) / 375. Podrobki / inne napiecie -> thrust_scale.
+_KGF = 9.80665
+_T200_PWM_OFF = [25, 50, 100, 150, 200, 250, 300, 350, 400]                  # |PWM - 1500| [us]
+_T200_FWD_KGF = [0.0, 0.06, 0.36, 0.82, 1.43, 2.15, 3.00, 4.05, 5.25]
+_T200_REV_KGF = [0.0, 0.05, 0.29, 0.66, 1.13, 1.71, 2.37, 3.20, 4.07]
+T200_CMD = [round((o - 25) / 375.0, 4) for o in _T200_PWM_OFF]
+T200_FWD_N = [round(k * _KGF, 2) for k in _T200_FWD_KGF]                     # max 51.5 N
+T200_REV_N = [round(k * _KGF, 2) for k in _T200_REV_KGF]                     # max 39.9 N
+
+
+def thrust_tables(scale=1.0):
+    """-> (table_fwd, table_rev): listy (cmd 0..1, sila [N]) dla force_to_cmd / cmd_to_force, ciag * scale."""
+    return ([(c, f * scale) for c, f in zip(T200_CMD, T200_FWD_N)],
+            [(c, f * scale) for c, f in zip(T200_CMD, T200_REV_N)])
+
+
+def cmd_to_force(cmd, table_fwd, table_rev):
+    """Sygnal pednika -1..1 -> sila [N] wg krzywej (odwrotnosc force_to_cmd). Do symulacji."""
+    cmd = np.asarray(cmd, float)
+    cf, ff = [p[0] for p in table_fwd], [p[1] for p in table_fwd]
+    cr, fr = [p[0] for p in table_rev], [p[1] for p in table_rev]
+    return np.where(cmd >= 0, np.interp(np.abs(cmd), cf, ff), -np.interp(np.abs(cmd), cr, fr))
+
 
 def build_B(thrusters=THRUSTERS, r_cg_mm=(0.0, 0.0, 0.0), beta_deg=None):
     """Macierz alokacji 6x8 (pozycje w mm -> m). beta_deg nadpisuje |theta| dla wszystkich (zachowuje znaki)."""

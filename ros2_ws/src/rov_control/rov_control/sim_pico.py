@@ -99,7 +99,7 @@ class SimPico(Node):
         for name in al.NAMES:
             s = al.SLOT_OF[name]; m = slots.get(s, 0)
             self.motor_of.append((m - 1 if 1 <= m <= 8 else -1, -1.0 if inv.get(s) else 1.0))
-        self.f_max = (40.0, 30.0)
+        self.tab = al.thrust_tables(1.0)      # ta sama krzywa T200 co mikser
 
     def step_imu(self):
         import numpy as np
@@ -107,11 +107,11 @@ class SimPico(Node):
             self._init_dyn()
         dt = 0.02
         t = self.thr if time.time() - self.cmd_t < 0.5 else [0.0] * 8
+        from rov_control import allocation as al
         f = np.zeros(8)
         for i, (m, sgn) in enumerate(self.motor_of):
             if m >= 0:
-                c = t[m] * sgn
-                f[i] = c * (self.f_max[0] if c >= 0 else self.f_max[1])
+                f[i] = float(al.cmd_to_force(t[m] * sgn, *self.tab))
         tau = self.B @ f                       # [X Y Z K M N] w FRD (N, Nm)
         # FRD -> konwencja komend: roll + = prawa burta w dol (= +K), pitch + = dziob w gore (= +M), yaw + = w lewo (= -N), heave + = gora (= -Z)
         I_rot, kd = 2.5, 1.5                   # bezwladnosc [kg m2] i tlumienie - zgrubnie (ROV ~25 kg)
