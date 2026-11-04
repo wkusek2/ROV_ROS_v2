@@ -1,0 +1,23 @@
+[Unit]
+Description=ROV stack (micro-ROS agent, thruster mixer, rosbridge, GUI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=orin
+Group=orin
+Environment=HOME=/home/orin
+Environment=ROS_DOMAIN_ID=0
+# Devkit nie ma baterii RTC: zegar po starcie jest stary, a NTP (przez laptop) przestawia go skokiem kilkanascie sekund pozniej.
+# Skok zegara po starcie wezlow psuje DDS (nowe subskrypcje nie widza starych publisherow). Czekamy do 15 s na synchronizacje;
+# bez zrodla czasu (w wodzie bez internetu) startujemy po 15 s i tak - wtedy zegar sie nie przestawi.
+ExecStartPre=/bin/bash -c 'for i in $(seq 1 15); do [ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" = yes ] && exit 0; sleep 1; done; exit 0'
+ExecStart=/bin/bash -c 'source /home/orin/nowy_rov/ROV_ROS2/scripts/env.sh && exec ros2 launch rov_bringup rov.launch.py'
+KillSignal=SIGINT
+TimeoutStopSec=15
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

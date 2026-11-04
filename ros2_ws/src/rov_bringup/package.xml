@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>rov_bringup</name>
+  <version>0.1.0</version>
+  <description>Uruchomienie ROV na Jetsonie: agent micro-ROS dla Pico 2 (USB)</description>
+  <maintainer email="wkusek2@gmail.com">wkusek</maintainer>
+  <license>GPL-3.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <exec_depend>micro_ros_agent</exec_depend>
+  <exec_depend>rov_msgs</exec_depend>
+  <exec_depend>rov_tools</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

@@ -1,0 +1,13 @@
+# Mikser z alokacja sil (rov_control/allocation.py): geometria 8 pednikow (FRD, psi/theta, BETA) jest w kodzie,
+# tutaj parametry fizyczne. Przypisanie pednik -> silnik M1..M8 robi sie w GUI (zapis ~/nowy_rov/config/thrusters.json).
+thruster_mixer:
+  ros__parameters:
+    rate_hz: 20.0
+    cmd_timeout_s: 0.5        # brak /rov/cmd_vel dluzej -> zera
+    default_gain: 0.3         # gain po starcie (GUI zmienia /rov/gain)
+    beta_deg: 22.4            # |theta| pednikow (pochylenie ciagu wzgledem plaszczyzny x-y)
+    r_cg_mm: [0.0, 0.0, 0.0]  # srodek masy wzgledem srodka geometrycznego [mm] (FRD: x przod, y prawo, z dol)
+    f_max_fwd: 40.0           # [N] max ciag pednika do przodu
+    f_max_rev: 30.0           # [N] max ciag do tylu
+    cmd_exponent: 1.0         # sila = Fmax * |cmd|^exp; 1.0 liniowo, T200 ok. 1.6 (podmienic po pomiarze)
+    weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]   # wagi pednikow w pseudoodwrotnosci (PGL PGP TGL TGP PDL PDP TDL TDP)

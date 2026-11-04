@@ -1,0 +1,17 @@
+# Regulator orientacji / glebokosci (rov_control/attitude_controller.py)
+attitude_controller:
+  ros__parameters:
+    # Mapowanie osi czujnika -> cialo FLU (x przod, y lewo, z gora). IMU lezy na boku (grawitacja na -Y czujnika),
+    # wiec cialo_z = -sensor_y. Ktora os czujnika patrzy do przodu - zweryfikowac w GUI (pochyl dziob w gore -> pitch +).
+    imu_axes: "x,z,-y"
+    acc_weight: 0.02          # sila korekty akcelerometrem (0.005 wolno/gladko .. 0.05 szybko)
+    rate_hz: 20.0
+    pilot_timeout_s: 0.5
+    deadband: 0.08            # |pilot| powyzej -> regulator tej osi odpuszcza i po puszczeniu przejmuje biezacy stan
+    i_limit: 0.3              # anty-windup: maks. wklad czlonu calkujacego w komende (-1..1)
+    out_limit: 0.6            # maks. korekta regulatora na os; reszta zakresu zostaje dla pilota
+    # PID: [kp, ki, kd]; wyjscie w jednostkach komendy -1..1 na stopien bledu (kurs/poziom) lub na metr (glebokosc)
+    gains_yaw:   [0.02, 0.002, 0.004]
+    gains_roll:  [0.02, 0.002, 0.004]
+    gains_pitch: [0.02, 0.002, 0.004]
+    gains_depth: [1.5, 0.2, 0.5]

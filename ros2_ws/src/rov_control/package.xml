@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>rov_control</name>
+  <version>0.1.0</version>
+  <description>Mikser pednikow ROV: /rov/cmd_vel (Twist) + arm + gain -> /rov/thrusters, z deadmanem</description>
+  <maintainer email="wkusek2@gmail.com">wkusek</maintainer>
+  <license>GPL-3.0</license>
+  <depend>rclpy</depend>
+  <depend>rov_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>std_msgs</depend>
+  <export><build_type>ament_python</build_type></export>
+</package>

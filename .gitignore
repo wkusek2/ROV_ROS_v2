@@ -1,0 +1,22 @@
+# buildy Pico
+pico_fw/build*/
+pico_bms/build*/
+# zbudowana biblioteka micro-ROS (7 MB, generowana przez microros_lib/build_lib.sh)
+microros_lib/libmicroros/
+# ROS 2 workspace
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+# python
+__pycache__/
+*.pyc
+# edytory / system
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+# dane runtime (na Jetsonie leza poza repo, ale na wszelki wypadek)
+logs/
+recordings/
+*.mjpeg
+*.db3

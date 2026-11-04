@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ROV Console</title>
+<style>
+  :root { --bg:#0f1419; --panel:#182028; --line:#2a3642; --fg:#e6edf3; --dim:#8b98a5; --ok:#3fb950; --warn:#d29922; --bad:#f85149; --acc:#58a6ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif; }
+  header { display:flex; gap:16px; align-items:center; padding:10px 16px; background:var(--panel); border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  header h1 { font-size:16px; margin:0 12px 0 0; letter-spacing:.5px; }
+  .pill { padding:3px 10px; border-radius:12px; background:#222c36; color:var(--dim); font-size:12px; border:1px solid var(--line); }
+  .pill.ok { color:var(--ok); border-color:var(--ok); } .pill.bad { color:var(--bad); border-color:var(--bad); } .pill.warn { color:var(--warn); border-color:var(--warn); }
+  #arm { margin-left:auto; font-size:20px; font-weight:700; padding:8px 22px; border-radius:8px; border:2px solid var(--bad); color:var(--bad); background:transparent; cursor:pointer; }
+  #arm.armed { background:var(--bad); color:#fff; animation:blink 1s step-end infinite; }
+  @keyframes blink { 50% { opacity:.75; } }
+  main { display:grid; grid-template-columns: 300px 1fr 300px; gap:12px; padding:12px 16px; }
+  @media (max-width:1000px){ main { grid-template-columns:1fr; } }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+  .card h2 { font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--dim); margin:0 0 10px; }
+  .kv { display:grid; grid-template-columns:auto 1fr; gap:4px 12px; font-variant-numeric:tabular-nums; }
+  .kv span:nth-child(odd) { color:var(--dim); }
+  .big { font-size:28px; font-weight:600; font-variant-numeric:tabular-nums; }
+  canvas#horizon { width:100%; height:160px; display:block; border-radius:8px; background:#000; }
+  .thr { display:grid; grid-template-columns:repeat(8,1fr); gap:8px; }
+  .m { text-align:center; font-size:12px; }
+  .bar { position:relative; height:140px; background:#0b1016; border:1px solid var(--line); border-radius:6px; overflow:hidden; margin:4px 0; }
+  .bar .mid { position:absolute; left:0; right:0; top:50%; height:1px; background:var(--line); }
+  .bar .fill { position:absolute; left:4px; right:4px; background:var(--acc); border-radius:3px; }
+  .bar .fill.neg { background:var(--warn); }
+  .m .v { font-variant-numeric:tabular-nums; } .m .rpm { color:var(--dim); font-size:11px; }
+  .m.bad .bar { border-color:var(--bad); }
+  button { background:#222c36; color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:7px 10px; cursor:pointer; font-size:13px; }
+  button:hover { border-color:var(--acc); } button.danger { border-color:var(--bad); color:var(--bad); }
+  .row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+  input[type=range] { width:100%; }
+  .axes { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; font-size:12px; font-variant-numeric:tabular-nums; }
+  .axes div { background:#0b1016; border:1px solid var(--line); border-radius:6px; padding:4px 8px; }
+  .axes b { color:var(--dim); font-weight:500; }
+  #log { font:12px/1.3 ui-monospace,Consolas,monospace; color:var(--dim); max-height:120px; overflow:auto; white-space:pre-wrap; }
+  .warnbox { color:var(--warn); font-size:12px; margin-top:6px; }
+  kbd { background:#0b1016; border:1px solid var(--line); border-radius:4px; padding:0 5px; font-size:11px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ROV</h1>
+  <span id="st-ws" class="pill bad">rosbridge: brak</span>
+  <span id="st-pico" class="pill bad">Pico: brak</span>
+  <span id="st-mixer" class="pill bad">mikser: brak</span>
+  <span id="st-pad" class="pill">pad: brak</span>
+  <span id="st-3d" class="pill warn">ESC 3D: ?</span>
+  <span id="st-bat" class="pill">bat: --.- V</span>
+  <span id="st-leak" class="pill">zalanie: ?</span>
+  <button id="arm">DISARMED</button>
+</header>
+<main>
+  <section>
+    <div class="card">
+      <h2>Orientacja</h2>
+      <canvas id="horizon" width="272" height="160"></canvas>
+      <div class="kv" style="margin-top:8px">
+        <span>roll</span><span id="roll">--</span>
+        <span>pitch</span><span id="pitch">--</span>
+        <span>yaw</span><span id="yaw">--</span>
+        <span>gyro</span><span id="gyro">--</span>
+      </div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <h2>Glebokosc / cisnienie</h2>
+      <div class="big"><span id="depth">--</span> m</div>
+      <div class="kv">
+        <span>MS5837</span><span id="p0">--</span>
+        <span>MS5803</span><span id="p1">--</span>
+        <span>temp IMU</span><span id="timu">--</span>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="b-p0">zeruj glebokosc</button>
+        <button id="b-imucal">kalibruj zyro</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <h2>Stabilizacja (wektor zadany) <span id="ctrl-imu" class="pill" style="float:right">IMU ?</span></h2>
+      <div class="row" style="align-items:center">
+        <button id="b-zero">ZERUJ IMU (poziom + kurs 0)</button>
+      </div>
+      <div class="kv" style="margin-top:6px">
+        <span>roll / pitch / yaw</span><span id="att">--</span>
+        <span>korekty</span><span id="corr" style="font-size:12px">--</span>
+      </div>
+      <div style="display:grid;grid-template-columns:auto 1fr auto;gap:6px 8px;align-items:center;margin-top:8px;font-size:13px">
+        <label><input type="checkbox" id="m-yaw"> kurs</label>   <input type="number" id="sp-yaw" step="1" value="0" style="width:70px"> <span style="color:var(--dim)">° (+ w lewo)</span>
+        <label><input type="checkbox" id="m-level"> poziom</label> <span>roll <input type="number" id="sp-roll" step="1" value="0" style="width:52px"> pitch <input type="number" id="sp-pitch" step="1" value="0" style="width:52px"></span> <span style="color:var(--dim)">°</span>
+        <label><input type="checkbox" id="m-depth"> glebokosc</label> <input type="number" id="sp-depth" step="0.1" value="0" style="width:70px"> <span style="color:var(--dim)">m</span>
+      </div>
+      <div class="row" style="margin-top:8px"><button id="b-sp">ustaw wektor zadany</button><span id="ctrl-msg" style="color:var(--dim);font-size:12px"></span></div>
+      <div style="color:var(--dim);font-size:12px;margin-top:6px">Ruch galka na danej osi zawiesza regulator tej osi; po puszczeniu przejmuje aktualny stan. Nastawy PID: <code>rov gains</code>.</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="card" style="padding:8px">
+      <h2 style="margin:0 6px 6px">Kamera <span id="cam-info" style="float:right;text-transform:none;letter-spacing:0">--</span></h2>
+      <div style="position:relative;background:#000;border-radius:8px;overflow:hidden;aspect-ratio:16/9">
+        <img id="cam" alt="brak obrazu" style="width:100%;height:100%;object-fit:contain;display:block">
+        <div id="cam-rec" style="position:absolute;top:8px;left:10px;color:#fff;background:var(--bad);padding:2px 8px;border-radius:6px;font-size:12px;display:none">● REC</div>
+      </div>
+      <div class="row" style="margin:8px 6px 0;align-items:center">
+        <button id="b-snap">zdjecie</button>
+        <button id="b-rec">nagrywaj</button>
+        <button id="b-af">AF</button>
+        <span style="color:var(--dim)">ostrosc</span><input type="range" id="focus" min="0" max="1023" step="1" value="500" style="width:160px">
+        <span id="focus-v" style="font-variant-numeric:tabular-nums">500</span>
+        <button id="b-cam-reload" title="wznow strumien">↻</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <h2>Pedniki (gaz z miksera / eRPM z ESC)</h2>
+      <div class="thr" id="thr"></div>
+      <div class="kv" style="margin-top:10px; grid-template-columns:auto 1fr auto 1fr">
+        <span>prad ESC1</span><span id="i0">--</span>
+        <span>prad ESC2</span><span id="i1">--</span>
+        <span>failsafe Pico</span><span id="fs">--</span>
+        <span>cmd age</span><span id="cmdage">--</span>
+      </div>
+      <div id="warn" class="warnbox"></div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <h2 style="cursor:pointer" id="cfg-toggle">Konfiguracja pednikow <span style="float:right;color:var(--dim);text-transform:none;letter-spacing:0">(kliknij, zeby rozwinac)</span></h2>
+      <div id="cfg" style="display:none">
+        <div style="color:var(--dim);font-size:12px;margin-bottom:8px">
+          Widok z gory, dziob u gory. Do kazdej pozycji przypisz numer silnika (M1-M8), zaznacz "odwr." gdy kreci w zla strone.
+          "Kręć +" powinien pchac: gorne (pionowe) = pojazd DO GORY, dolne (poziome) = pojazd DO PRZODU. Test: 15 % przez 2 s, tylko przy DISARM.
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div><div style="text-align:center;color:var(--dim);font-size:12px;margin-bottom:4px">GORNE (pionowe)</div><div id="slots-up" style="display:grid;grid-template-columns:1fr 1fr;gap:6px"></div></div>
+          <div><div style="text-align:center;color:var(--dim);font-size:12px;margin-bottom:4px">DOLNE (poziome, 45°)</div><div id="slots-down" style="display:grid;grid-template-columns:1fr 1fr;gap:6px"></div></div>
+        </div>
+        <div class="row" style="margin-top:10px;align-items:center">
+          <button id="b-cfg-save">zapisz konfiguracje</button>
+          <button id="b-cfg-default">domyslna</button>
+          <span id="cfg-msg" style="color:var(--dim);font-size:12px"></span>
+        </div>
+        <div style="color:var(--dim);font-size:12px;margin:10px 0 4px">Test pojedynczego silnika (bez przypisania):</div>
+        <div id="motor-test" class="row"></div>
+        <h2 style="margin-top:14px">Weryfikacja alokacji (macierz B)</h2>
+        <div id="alloc-sum" style="font-size:12px;color:var(--dim)">--</div>
+        <table id="alloc-tab" style="width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums;margin-top:6px"></table>
+        <div style="color:var(--dim);font-size:12px;margin-top:6px">
+          "test ruchu" kreci wszystkie pedniki w proporcjach z alokacji (max 15 %, 2 s, tylko DISARM). Pojazd powinien ruszyc
+          w podanym kierunku; jesli nie, popraw przypisanie / "odwr." w pozycjach wyzej.
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <h2>Sterowanie</h2>
+      <div class="axes">
+        <div><b>surge</b> <span id="a-surge">0.00</span></div>
+        <div><b>sway</b> <span id="a-sway">0.00</span></div>
+        <div><b>heave</b> <span id="a-heave">0.00</span></div>
+        <div><b>roll</b> <span id="a-roll">0.00</span></div>
+        <div><b>pitch</b> <span id="a-pitch">0.00</span></div>
+        <div><b>yaw</b> <span id="a-yaw">0.00</span></div>
+      </div>
+      <div style="margin-top:10px">gain: <b id="gain-v">0.30</b>
+        <input type="range" id="gain" min="0" max="1" step="0.05" value="0.3"></div>
+      <div style="color:var(--dim); font-size:12px; margin-top:6px">
+        Pad: lewa galka = przod/bok, prawa = obrot/gora-dol, <kbd>A</kbd> arm, <kbd>B</kbd> disarm, <kbd>LB</kbd>/<kbd>RB</kbd> gain.
+        Klawiatura: <kbd>W</kbd><kbd>S</kbd> przod/tyl, <kbd>A</kbd><kbd>D</kbd> bok, <kbd>Q</kbd><kbd>E</kbd> obrot, <kbd>R</kbd><kbd>F</kbd> gora/dol,
+        <kbd>Enter</kbd> arm, <kbd>Spacja</kbd> STOP.
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="card">
+      <h2>Bateria / BMS Daly <span id="bms-on" class="pill bad" style="float:right">brak</span></h2>
+      <div class="big"><span id="bms-v">--.-</span> V <span style="font-size:16px;color:var(--dim)">&nbsp;<span id="bms-i">--.-</span> A</span></div>
+      <div style="height:14px;background:#0b1016;border:1px solid var(--line);border-radius:7px;overflow:hidden;margin:6px 0">
+        <div id="soc-bar" style="height:100%;width:0;background:var(--ok)"></div></div>
+      <div class="kv">
+        <span>SOC</span><span><b id="bms-soc">--</b> %  (<span id="bms-ah">--</span> Ah)</span>
+        <span>stan</span><span id="bms-state">--</span>
+        <span>MOS</span><span id="bms-mos">--</span>
+        <span>ogniwa</span><span id="bms-cells">--</span>
+        <span>temp</span><span id="bms-temp">--</span>
+        <span>cykle</span><span id="bms-cyc">--</span>
+      </div>
+      <div id="cells" style="display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-top:8px;font-size:11px;font-variant-numeric:tabular-nums"></div>
+      <div id="bms-faults" class="warnbox"></div>
+      <div class="row" style="margin-top:8px;align-items:center">
+        <span id="pwr" class="pill">zasilanie pojazdu: ?</span>
+        <button id="b-pcycle" class="danger">restart zasilania (5 s)</button>
+      </div>
+      <div class="row" style="align-items:center">
+        <span style="color:var(--dim)">ring LED</span>
+        <input type="color" id="led-col" value="#ffffff" style="width:44px;height:28px;background:none;border:1px solid var(--line);border-radius:6px">
+        <input type="range" id="led-br" min="0" max="1" step="0.05" value="0.3" style="width:120px">
+        <button id="b-led-off">zgas</button>
+      </div>
+      <div id="bms-info" style="font:11px ui-monospace,Consolas,monospace;color:var(--dim);margin-top:6px;word-break:break-all"></div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <h2>ESC</h2>
+      <div class="row">
+        <button id="b-stop" class="danger">STOP</button>
+        <button id="b-beep">beep</button>
+      </div>
+      <div class="row">
+        <button id="b-3don">3D ON + save</button>
+        <button id="b-3doff">3D OFF + save</button>
+      </div>
+      <div class="row">
+        <button id="b-cz">zeruj prad</button>
+        <button id="b-poles">bieguny: <span id="poles-v">?</span></button>
+      </div>
+      <div class="kv">
+        <span>DShot</span><span id="rate">--</span>
+        <span>agent</span><span id="agent">--</span>
+        <span>status Pico</span><span id="pstat" style="font-size:11px">--</span>
+      </div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <h2>Log</h2>
+      <div id="log"></div>
+    </div>
+  </section>
+</main>
+
+<script src="roslib.min.js"></script>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const log = (s) => { const el = $('log'); el.textContent = `${new Date().toLocaleTimeString()} ${s}\n` + el.textContent.slice(0, 4000); };
+  window.addEventListener('error', e => log('BLAD JS: ' + e.message + ' @' + e.lineno));
+  window.addEventListener('unhandledrejection', e => log('BLAD JS (promise): ' + (e.reason && e.reason.message || e.reason)));
+  const AX = ['surge','sway','heave','roll','pitch','yaw'];
+
+  // ---- stan ----
+  let armed = false, gain = 0.3, cmd = {surge:0,sway:0,heave:0,roll:0,pitch:0,yaw:0};
+  let keys = {}, padIndex = null, padPrev = {}, lastTlm = 0, lastMixer = 0, tlm = null;
+
+  // ---- ROS ----
+  const host = location.hostname || 'localhost';
+  const ros = new ROSLIB.Ros({ url: `ws://${host}:9090` });
+  ros.on('connection', () => { setPill('st-ws', 'rosbridge: OK', 'ok'); log('rosbridge polaczony'); });
+  ros.on('close', () => { setPill('st-ws', 'rosbridge: brak', 'bad'); setArmed(false, true); setTimeout(() => ros.connect(`ws://${host}:9090`), 2000); });
+  ros.on('error', () => {});
+
+  const T = (name, type, opts={}) => new ROSLIB.Topic(Object.assign({ ros, name, messageType: type }, opts));
+  const pubCmd  = T('/rov/cmd_vel_pilot', 'geometry_msgs/msg/Twist');   // -> attitude_controller -> /rov/cmd_vel -> mikser
+  const pubArm  = T('/rov/arm', 'std_msgs/msg/Bool');
+  const pubGain = T('/rov/gain', 'std_msgs/msg/Float32');
+  const pubEsc  = T('/rov/esc/command', 'rov_msgs/msg/EscCommand');
+  const srvP0   = new ROSLIB.Service({ ros, name: '/rov/depth/zero', serviceType: 'std_srvs/srv/Trigger' });
+  const srvCal  = new ROSLIB.Service({ ros, name: '/rov/imu/calibrate', serviceType: 'std_srvs/srv/Trigger' });
+
+  T('/rov/esc/telemetry', 'rov_msgs/msg/EscTelemetry').subscribe(onTlm);
+  T('/rov/control/status', 'std_msgs/msg/String').subscribe(m => { lastMixer = Date.now(); onMixer(JSON.parse(m.data)); });
+  T('/rov/imu', 'sensor_msgs/msg/Imu', { throttle_rate: 50, queue_length: 1 }).subscribe(onImu);
+  T('/rov/depth', 'std_msgs/msg/Float32', { throttle_rate: 100 }).subscribe(m => $('depth').textContent = m.data.toFixed(2));
+  T('/rov/pressure/ms5837', 'sensor_msgs/msg/FluidPressure', { throttle_rate: 500 }).subscribe(m => $('p0').textContent = (m.fluid_pressure/100).toFixed(1) + ' mbar');
+  T('/rov/pressure/ms5803', 'sensor_msgs/msg/FluidPressure', { throttle_rate: 500 }).subscribe(m => $('p1').textContent = (m.fluid_pressure/100).toFixed(1) + ' mbar');
+  T('/rov/imu/temperature', 'sensor_msgs/msg/Temperature', { throttle_rate: 1000 }).subscribe(m => $('timu').textContent = m.temperature.toFixed(1) + ' C');
+  T('/rov/status', 'std_msgs/msg/String').subscribe(m => $('pstat').textContent = m.data);
+  let leakPrev = 0;
+  const pubLeakReset = T('/rov/leak/reset', 'std_msgs/msg/Bool');
+  const sens = v => v === 3 ? '1+2' : String(v);
+  T('/rov/leak', 'std_msgs/msg/UInt8').subscribe(m => {
+    const cur = m.data & 0x0F, lat = m.data >> 4;
+    if (cur) setPill('st-leak', `ZALANIE! czujnik ${sens(cur)}  (kliknij = reset)`, 'bad');
+    else if (lat) setPill('st-leak', `ZALANIE BYLO: czujnik ${sens(lat)}  (kliknij = reset)`, 'warn');
+    else setPill('st-leak', 'zalanie: nie', 'ok');
+    document.body.style.boxShadow = cur ? 'inset 0 0 0 6px var(--bad)' : (lat ? 'inset 0 0 0 6px var(--warn)' : '');
+    if (cur & ~leakPrev) log('!!! ZALANIE: czujnik ' + sens(cur));
+    leakPrev = cur;
+  });
+  $('st-leak').style.cursor = 'pointer';
+  $('st-leak').onclick = () => { if (confirm('Skasowac alarm zalania? (zdarzenie zostaje w logu)')) { pubLeakReset.publish(new ROSLIB.Message({ data: true })); log('reset alarmu zalania'); } };
+  T('/rov/bms/status', 'rov_msgs/msg/BmsStatus').subscribe(onBms);
+  T('/rov/bms/info', 'std_msgs/msg/String').subscribe(m => $('bms-info').textContent = m.data);
+  T('/rov/power/state', 'std_msgs/msg/Bool').subscribe(m => setPill('pwr', 'zasilanie pojazdu: ' + (m.data ? 'ON' : 'OFF'), m.data ? 'ok' : 'bad'));
+  // ---- kamera ----
+  const camUrl = () => `http://${host}:8089/cam.mjpg?t=${Date.now()}`;
+  $('cam').src = camUrl();
+  $('b-cam-reload').onclick = () => { $('cam').src = camUrl(); };
+  $('cam').onerror = () => setTimeout(() => { $('cam').src = camUrl(); }, 3000);
+  let camRec = false;
+  T('/rov/camera/info', 'std_msgs/msg/String').subscribe(m => {
+    const s = JSON.parse(m.data);
+    $('cam-info').textContent = (s.alive ? `${s.fps} fps ${s.w}x${s.h}` : 'brak klatek') + (s.recording ? `  REC ${s.rec_frames}` : '');
+    $('cam-info').style.color = s.alive ? 'var(--ok)' : 'var(--bad)';
+    camRec = s.recording; $('cam-rec').style.display = camRec ? 'block' : 'none'; $('b-rec').textContent = camRec ? 'stop nagrywania' : 'nagrywaj';
+    if (document.activeElement !== $('focus')) { $('focus').value = s.focus; $('focus-v').textContent = s.focus; }
+  });
+  const srvRec = new ROSLIB.Service({ ros, name: '/rov/camera/record', serviceType: 'std_srvs/srv/SetBool' });
+  const srvSnap = new ROSLIB.Service({ ros, name: '/rov/camera/snapshot', serviceType: 'std_srvs/srv/Trigger' });
+  const srvAf = new ROSLIB.Service({ ros, name: '/rov/camera/autofocus', serviceType: 'std_srvs/srv/Trigger' });
+  const pubFocus = T('/rov/camera/focus', 'std_msgs/msg/UInt16');
+  $('b-rec').onclick = () => srvRec.callService(new ROSLIB.ServiceRequest({ data: !camRec }), r => log('kamera: ' + r.message));
+  $('b-snap').onclick = () => srvSnap.callService(new ROSLIB.ServiceRequest({}), r => log('zdjecie: ' + r.message));
+  $('b-af').onclick = () => { log('AF...'); srvAf.callService(new ROSLIB.ServiceRequest({}), r => log(r.message)); };
+  $('focus').oninput = e => { $('focus-v').textContent = e.target.value; pubFocus.publish(new ROSLIB.Message({ data: parseInt(e.target.value) })); };
+
+  // ---- stabilizacja ----
+  const pubMode = T('/rov/ctrl/mode', 'std_msgs/msg/String'), pubSp = T('/rov/ctrl/setpoint', 'std_msgs/msg/String');
+  const srvZero = new ROSLIB.Service({ ros, name: '/rov/imu/zero', serviceType: 'std_srvs/srv/Trigger' });
+  $('b-zero').onclick = () => srvZero.callService(new ROSLIB.ServiceRequest({}), r => { log(r.message); $('ctrl-msg').textContent = r.message; });
+  const sendMode = () => pubMode.publish(new ROSLIB.Message({ data: JSON.stringify({ yaw_hold: $('m-yaw').checked, level: $('m-level').checked, depth_hold: $('m-depth').checked }) }));
+  ['m-yaw', 'm-level', 'm-depth'].forEach(id => $(id).onchange = sendMode);
+  $('b-sp').onclick = () => { pubSp.publish(new ROSLIB.Message({ data: JSON.stringify({ yaw_deg: +$('sp-yaw').value, roll_deg: +$('sp-roll').value, pitch_deg: +$('sp-pitch').value, depth_m: +$('sp-depth').value }) })); $('ctrl-msg').textContent = 'wektor zadany wyslany'; log('wektor zadany: ' + [$('sp-yaw').value, $('sp-roll').value, $('sp-pitch').value, $('sp-depth').value].join(' / ')); };
+  let spEditing = false;
+  ['sp-yaw', 'sp-roll', 'sp-pitch', 'sp-depth'].forEach(id => { $(id).onfocus = () => spEditing = true; $(id).onblur = () => spEditing = false; });
+  T('/rov/ctrl/status', 'std_msgs/msg/String').subscribe(m => {
+    const s = JSON.parse(m.data);
+    setPill('ctrl-imu', s.imu_ok ? (s.zeroed ? 'IMU OK, wyzerowane' : 'IMU OK, NIE wyzerowane') : 'IMU brak', s.imu_ok ? (s.zeroed ? 'ok' : 'warn') : 'bad');
+    $('att').textContent = `${s.rpy[0].toFixed(1)}° / ${s.rpy[1].toFixed(1)}° / ${s.rpy[2].toFixed(1)}°` + (s.depth != null ? `   gleb. ${s.depth.toFixed(2)} m` : '');
+    $('corr').textContent = `yaw ${s.corr.yaw.toFixed(2)}  roll ${s.corr.roll.toFixed(2)}  pitch ${s.corr.pitch.toFixed(2)}  heave ${s.corr.heave.toFixed(2)}  | calki: ${Object.entries(s.integral || {}).map(([k, v]) => k[0] + ':' + v.toFixed(2)).join(' ')}` + (s.saturated && s.saturated.length ? '  NASYCENIE: ' + s.saturated.join(',') : '') + (Object.values(s.suspended).some(v => v) ? '  (zawieszone: ' + Object.keys(s.suspended).filter(k => s.suspended[k]).join(',') + ')' : '') + (s.pilot_active ? '' : '  [pilot nieaktywny]');
+    if (document.activeElement && document.activeElement.type !== 'checkbox') { $('m-yaw').checked = s.mode.yaw_hold; $('m-level').checked = s.mode.level; $('m-depth').checked = s.mode.depth_hold; }
+    if (!spEditing) { $('sp-yaw').value = s.setpoint.yaw_deg.toFixed(0); $('sp-roll').value = s.setpoint.roll_deg.toFixed(0); $('sp-pitch').value = s.setpoint.pitch_deg.toFixed(0); $('sp-depth').value = s.setpoint.depth_m.toFixed(2); }
+  });
+
+  const pubPower = T('/rov/power', 'std_msgs/msg/Bool');
+  const pubLed = T('/rov/led', 'std_msgs/msg/ColorRGBA');
+  function sendLed(off) {
+    const h = $('led-col').value, a = off ? 0 : parseFloat($('led-br').value);
+    pubLed.publish(new ROSLIB.Message({ r: parseInt(h.slice(1,3),16)/255, g: parseInt(h.slice(3,5),16)/255, b: parseInt(h.slice(5,7),16)/255, a }));
+  }
+  $('led-col').oninput = () => sendLed(false); $('led-br').oninput = () => sendLed(false); $('b-led-off').onclick = () => sendLed(true);
+  $('b-pcycle').onclick = () => { if (confirm('Odciac zasilanie calej elektroniki pojazdu na 5 s?')) { pubPower.publish(new ROSLIB.Message({ data: false })); log('restart zasilania pojazdu'); } };
+
+  // ---- BMS Daly ----
+  const FAULTS = [
+    ['V ogniwa wysokie L1','V ogniwa wysokie L2','V ogniwa niskie L1','V ogniwa niskie L2','V pakietu wysokie L1','V pakietu wysokie L2','V pakietu niskie L1','V pakietu niskie L2'],
+    ['T ladowania wysoka L1','T ladowania wysoka L2','T ladowania niska L1','T ladowania niska L2','T rozladowania wysoka L1','T rozladowania wysoka L2','T rozladowania niska L1','T rozladowania niska L2'],
+    ['nadprad ladowania L1','nadprad ladowania L2','nadprad rozladowania L1','nadprad rozladowania L2','SOC wysoki L1','SOC wysoki L2','SOC niski L1','SOC niski L2'],
+    ['roznica V ogniw L1','roznica V ogniw L2','roznica T L1','roznica T L2','','','',''],
+    ['T MOS ladowania wysoka','T MOS rozladowania wysoka','czujnik T MOS lad.','czujnik T MOS rozl.','MOS lad. sklejony','MOS rozl. sklejony','MOS lad. przerwa','MOS rozl. przerwa'],
+    ['blad AFE','odpadl pomiar V','czujnik T ogniw','EEPROM','RTC','precharge','komunikacja','komunikacja wewn.'],
+    ['modul pradu','pomiar V pakietu','ZWARCIE','zakaz ladowania (niskie V)','','','',''],
+    ['','','','','','','','']];
+  let bmsSeen = 0;
+  // rosbridge koduje uint8[] jako base64 -> zamien na tablice liczb
+  const bytes = v => typeof v === 'string' ? Array.from(atob(v), c => c.charCodeAt(0)) : Array.from(v || []);
+  function onBms(b) {
+    bmsSeen = Date.now();
+    b.balance_bits = bytes(b.balance_bits); b.fault_bits = bytes(b.fault_bits);
+    setPill('bms-on', b.online ? 'online' : 'brak odpowiedzi', b.online ? 'ok' : 'bad');
+    $('bms-v').textContent = b.voltage_v.toFixed(1); $('bms-i').textContent = (b.current_a >= 0 ? '+' : '') + b.current_a.toFixed(1);
+    $('bms-soc').textContent = b.soc_pct.toFixed(1); $('bms-ah').textContent = b.remaining_ah.toFixed(1);
+    const sb = $('soc-bar'); sb.style.width = Math.max(0, Math.min(100, b.soc_pct)) + '%'; sb.style.background = b.soc_pct < 20 ? 'var(--bad)' : b.soc_pct < 40 ? 'var(--warn)' : 'var(--ok)';
+    $('bms-state').textContent = ['spoczynek','ladowanie','rozladowanie'][b.state] || b.state;
+    $('bms-mos').textContent = `lad. ${b.charge_mos ? 'ON' : 'off'} / rozl. ${b.discharge_mos ? 'ON' : 'off'}` + (b.charger_connected ? ' | ladowarka' : '') + (b.load_connected ? ' | obciazenie' : '');
+    $('bms-cells').textContent = `${b.cell_count}S  max ${b.max_cell_mv} mV (#${b.max_cell_no})  min ${b.min_cell_mv} mV (#${b.min_cell_no})  dV ${b.max_cell_mv - b.min_cell_mv} mV`;
+    $('bms-temp').textContent = `max ${b.max_temp_c}°C (#${b.max_temp_no})  min ${b.min_temp_c}°C (#${b.min_temp_no})  [${Array.from(b.temperature_c).slice(0, b.temp_count).join(', ')}]`;
+    $('bms-cyc').textContent = `${b.cycles}  (BMS life ${b.bms_life})`;
+    const cells = $('cells'); cells.innerHTML = '';
+    for (let i = 0; i < b.cell_count; i++) {
+      const v = b.cell_voltage_v[i], bal = (b.balance_bits[i >> 3] >> (i & 7)) & 1;
+      const col = v && (i + 1 === b.max_cell_no) ? 'var(--ok)' : v && (i + 1 === b.min_cell_no) ? 'var(--warn)' : 'var(--fg)';
+      cells.insertAdjacentHTML('beforeend', `<div style="background:#0b1016;border:1px solid ${bal ? 'var(--acc)' : 'var(--line)'};border-radius:4px;padding:2px 4px;color:${col}">${i+1}: ${v.toFixed(3)}${bal ? ' ⇄' : ''}</div>`);
+    }
+    const f = [];
+    for (let by = 0; by < 8; by++) for (let bit = 0; bit < 8; bit++) if ((b.fault_bits[by] >> bit) & 1) f.push(FAULTS[by][bit] || `bajt${by}.bit${bit}`);
+    $('bms-faults').textContent = f.length ? 'BLEDY BMS: ' + f.join(', ') : '';
+    $('bms-faults').style.color = f.length ? 'var(--bad)' : '';
+    if (b.online) setPill('st-bat', `bat: ${b.voltage_v.toFixed(1)} V  ${b.soc_pct.toFixed(0)} %`, b.soc_pct < 20 ? 'bad' : b.soc_pct < 40 ? 'warn' : 'ok');
+  }
+
+  function setPill(id, text, cls) { const e = $(id); e.textContent = text; e.className = 'pill ' + (cls || ''); }
+
+  // ---- pedniki ----
+  const thrEl = $('thr');
+  for (let i = 0; i < 8; i++) thrEl.insertAdjacentHTML('beforeend',
+    `<div class="m" id="m${i}">M${i+1}<div class="bar"><div class="mid"></div><div class="fill" id="f${i}"></div></div><div class="v" id="v${i}">0.00</div><div class="rpm" id="r${i}">--</div></div>`);
+  function setBar(i, v) {
+    const f = $('f'+i), h = Math.min(Math.abs(v), 1) * 50;
+    f.style.height = h + '%'; f.className = 'fill' + (v < 0 ? ' neg' : '');
+    if (v >= 0) { f.style.bottom = '50%'; f.style.top = ''; } else { f.style.top = '50%'; f.style.bottom = ''; }
+    $('v'+i).textContent = v.toFixed(2);
+  }
+
+  function onTlm(m) {
+    tlm = m; lastTlm = Date.now();
+    for (let i = 0; i < 8; i++) {
+      $('r'+i).textContent = m.erpm[i] ? m.erpm[i] + ' eRPM' : (m.bidir_ok[i] ? '0' : 'brak odp.');
+      $('m'+i).className = 'm' + (m.bidir_ok[i] ? '' : ' bad');
+    }
+    $('i0').textContent = m.esc_current_a[0].toFixed(2) + ' A'; $('i1').textContent = m.esc_current_a[1].toFixed(2) + ' A';
+    $('fs').textContent = m.failsafe ? 'TAK' : 'nie'; $('fs').style.color = m.failsafe ? 'var(--warn)' : 'var(--ok)';
+    $('cmdage').textContent = m.cmd_age_ms === 4294967295 ? 'nigdy' : m.cmd_age_ms + ' ms';
+    $('rate').textContent = 'DShot' + m.dshot_rate_kbit; $('agent').textContent = m.agent_connected ? 'OK' : 'brak';
+    $('poles-v').textContent = m.poles;
+    if (Date.now() - bmsSeen > 3000) {   // bez BMS: napiecie z telemetrii ESC
+      const volts = m.kiss_voltage_v.filter(v => v > 5); const vb = volts.length ? volts.reduce((a,b)=>a+b,0)/volts.length : 0;
+      setPill('st-bat', `bat (ESC): ${vb.toFixed(1)} V`, vb < 20 && vb > 5 ? 'warn' : (vb > 5 ? 'ok' : ''));
+    }
+    setPill('st-3d', m.mode_3d ? 'ESC 3D: ON' : 'ESC 3D: OFF (brak wstecz!)', m.mode_3d ? 'ok' : 'warn');
+    setPill('st-pico', 'Pico: OK', 'ok');
+  }
+  function onMixer(s) {
+    setPill('st-mixer', `mikser: OK  gain ${s.gain}` + (s.test ? `  TEST M${s.test.motor}` : ''), 'ok');
+    if (s.armed !== armed) setArmed(s.armed, true);
+    s.thrust.forEach((v, i) => setBar(i, v));
+    if (s.slots && !cfgDirty) fillSlots(s.slots);
+    cfgTest = s.test;
+    updateSlotRpm();
+    if (s.alloc) showAlloc(s.alloc, s);
+  }
+  const DOF_PL = { X: ['surge', 'przod'], Y: ['sway', 'w lewo'], Z: ['heave', 'do gory'], K: ['roll', 'prawa burta w dol'], M: ['pitch', 'dziob w gore'], N: ['yaw', 'w lewo'] };
+  const DOF_UNIT = { X: 'N', Y: 'N', Z: 'N', K: 'Nm', M: 'Nm', N: 'Nm' };
+  let allocShown = '';
+  function showAlloc(a, s) {
+    const key = JSON.stringify([a.rank, a.cond, a.tau_max, a.unassigned, s.slots]);
+    if (key === allocShown) return;
+    allocShown = key;
+    $('alloc-sum').innerHTML = `rzad <b style="color:${a.rank === 6 ? 'var(--ok)' : 'var(--bad)'}">${a.rank}/6</b> &nbsp; uwarunkowanie <b>${a.cond}</b> &nbsp; `
+      + `limity pednika +${a.f_max[0]} / -${a.f_max[1]} N` + (a.unassigned.length ? ` &nbsp; <span style="color:var(--bad)">NIEPRZYPISANE: ${a.unassigned.join(' ')}</span>` : ' &nbsp; <span style="color:var(--ok)">wszystkie pedniki przypisane</span>');
+    const slotOf = { PGL: 'FLU', PGP: 'FRU', TGL: 'RLU', TGP: 'RRU', PDL: 'FLD', PDP: 'FRD', TDL: 'RLD', TDP: 'RRD' };
+    let h = `<tr style="color:var(--dim)"><th style="text-align:left">ruch</th><th>max</th><th>blad</th><th>sprzez.</th>${a.names.map(n => `<th title="${n}">${slotOf[n]}</th>`).join('')}<th></th></tr>`;
+    for (const d of ['X', 'Y', 'Z', 'K', 'M', 'N']) {
+      const p = a.pure[d], ok = p.err < 1e-3 && p.coupling < 1e-3, mx = Math.max(...p.f.map(Math.abs)) || 1;
+      h += `<tr style="border-top:1px solid var(--line)"><td><b>${DOF_PL[d][0]}</b> <span style="color:var(--dim)">(${DOF_PL[d][1]})</span></td>`
+        + `<td style="text-align:center">${a.tau_max[d]} ${DOF_UNIT[d]}</td><td style="text-align:center;color:${ok ? 'var(--ok)' : 'var(--bad)'}">${p.err.toExponential(1)}</td><td style="text-align:center;color:${ok ? 'var(--ok)' : 'var(--bad)'}">${p.coupling.toExponential(1)}</td>`
+        + p.f.map((v, i) => { const m = s.slots[slotOf[a.names[i]]], lab = m && m.motor ? `M${m.motor}` : '?'; const r = v / mx; return `<td style="text-align:center;color:${Math.abs(r) < 0.05 ? 'var(--dim)' : (r > 0 ? 'var(--ok)' : 'var(--warn)')}">${r > 0.05 ? '+' : (r < -0.05 ? '−' : '·')}${Math.abs(r) > 0.05 ? Math.round(Math.abs(r) * 100) + '%' : ''}<br><span style="color:var(--dim)">${lab}</span></td>`; }).join('')
+        + `<td><button style="padding:2px 6px" onclick="window.__move('${DOF_PL[d][0]}',0.15)">test +</button> <button style="padding:2px 6px" onclick="window.__move('${DOF_PL[d][0]}',-0.15)">−</button></td></tr>`;
+    }
+    $('alloc-tab').innerHTML = h;
+  }
+  window.__move = (dof, value) => {
+    if (armed) return log('test ruchu: najpierw DISARM');
+    pubTest.publish(new ROSLIB.Message({ data: JSON.stringify({ dof, value, duration: 2.0 }) })); log(`test ruchu ${dof} ${value > 0 ? '+' : '-'}`);
+  };
+
+  // ---- konfiguracja pednikow ----
+  const SLOT_NAMES = { FLU: 'przod lewy', FRU: 'przod prawy', RLU: 'tyl lewy', RRU: 'tyl prawy', FLD: 'przod lewy', FRD: 'przod prawy', RLD: 'tyl lewy', RRD: 'tyl prawy' };
+  const DEFAULT_SLOTS = { FRD: 1, FLD: 2, RRD: 3, RLD: 4, FRU: 5, FLU: 6, RRU: 7, RLU: 8 };
+  let cfgDirty = false, cfgTest = null, cfgSlots = {};
+  const pubCfg = T('/rov/mixer/config', 'std_msgs/msg/String');
+  const pubTest = T('/rov/thruster_test', 'std_msgs/msg/String');
+  const spin = (motor, value, duration = 2.0) => {
+    if (armed) return log('test silnika: najpierw DISARM');
+    pubTest.publish(new ROSLIB.Message({ data: JSON.stringify({ motor, value, duration }) })); log(`test M${motor} ${value > 0 ? '+' : (value < 0 ? '-' : 'stop')}`);
+  };
+  $('cfg-toggle').onclick = () => { const c = $('cfg'); c.style.display = c.style.display === 'none' ? 'block' : 'none'; };
+  for (const [grp, keys] of [['slots-up', ['FLU', 'FRU', 'RLU', 'RRU']], ['slots-down', ['FLD', 'FRD', 'RLD', 'RRD']]]) {
+    for (const k of keys) $(grp).insertAdjacentHTML('beforeend', `
+      <div style="background:#0b1016;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:12px">
+        <div style="display:flex;justify-content:space-between"><b>${SLOT_NAMES[k]}</b><span id="rpm-${k}" style="color:var(--dim)">--</span></div>
+        <div class="row" style="margin:6px 0 0;align-items:center;gap:4px">
+          <select id="sel-${k}" style="background:#222c36;color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:3px">
+            <option value="0">brak</option>${[1,2,3,4,5,6,7,8].map(m => `<option value="${m}">M${m}</option>`).join('')}</select>
+          <label style="color:var(--dim)"><input type="checkbox" id="inv-${k}"> odwr.</label>
+          <button id="p-${k}" style="padding:3px 7px">kręć +</button><button id="m-${k}" style="padding:3px 7px">kręć −</button>
+        </div></div>`);
+  }
+  for (const k of Object.keys(SLOT_NAMES)) {
+    $(`sel-${k}`).onchange = () => { cfgDirty = true; $('cfg-msg').textContent = 'niezapisane zmiany'; };
+    $(`inv-${k}`).onchange = () => { cfgDirty = true; $('cfg-msg').textContent = 'niezapisane zmiany'; };
+    const motorOf = () => parseInt($(`sel-${k}`).value), sgn = () => ($(`inv-${k}`).checked ? -1 : 1);
+    $(`p-${k}`).onclick = () => motorOf() ? spin(motorOf(), 0.15 * sgn()) : log('najpierw przypisz silnik');
+    $(`m-${k}`).onclick = () => motorOf() ? spin(motorOf(), -0.15 * sgn()) : log('najpierw przypisz silnik');
+  }
+  function fillSlots(slots) {
+    cfgSlots = slots;
+    for (const k of Object.keys(SLOT_NAMES)) { if (slots[k]) { $(`sel-${k}`).value = slots[k].motor; $(`inv-${k}`).checked = !!slots[k].inv; } }
+  }
+  function readSlots() {
+    const o = {}; for (const k of Object.keys(SLOT_NAMES)) o[k] = { motor: parseInt($(`sel-${k}`).value), inv: $(`inv-${k}`).checked }; return o;
+  }
+  function updateSlotRpm() {
+    if (!tlm) return;
+    for (const k of Object.keys(SLOT_NAMES)) { const m = parseInt($(`sel-${k}`).value); $(`rpm-${k}`).textContent = m ? `M${m}: ${tlm.erpm[m - 1]} eRPM` : '--'; }
+    for (let i = 0; i < 8; i++) { const e = $(`mt-rpm-${i}`); if (e) e.textContent = tlm.erpm[i]; }
+  }
+  $('b-cfg-save').onclick = () => {
+    const s = readSlots(), used = {};
+    for (const k in s) { if (s[k].motor) { if (used[s[k].motor]) { $('cfg-msg').textContent = `M${s[k].motor} przypisany dwa razy (${used[s[k].motor]} i ${SLOT_NAMES[k]})`; $('cfg-msg').style.color = 'var(--bad)'; return; } used[s[k].motor] = SLOT_NAMES[k]; } }
+    pubCfg.publish(new ROSLIB.Message({ data: JSON.stringify({ slots: s }) }));
+    cfgDirty = false; $('cfg-msg').style.color = 'var(--ok)'; $('cfg-msg').textContent = 'zapisano (plik ~/nowy_rov/config/thrusters.json)'; log('konfiguracja pednikow zapisana');
+  };
+  $('b-cfg-default').onclick = () => { const s = {}; for (const k of Object.keys(SLOT_NAMES)) s[k] = { motor: DEFAULT_SLOTS[k] || 0, inv: false }; fillSlots(s); cfgDirty = true; $('cfg-msg').textContent = 'domyslna (BlueROV2 Heavy) - zapisz, zeby zastosowac'; };
+  for (let i = 1; i <= 8; i++) $('motor-test').insertAdjacentHTML('beforeend',
+    `<div style="background:#0b1016;border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:12px;text-align:center">M${i}<br>
+       <button onclick="window.__spin(${i},0.15)" style="padding:2px 6px">+</button> <button onclick="window.__spin(${i},-0.15)" style="padding:2px 6px">−</button><br><span id="mt-rpm-${i-1}" style="color:var(--dim)">--</span></div>`);
+  window.__spin = spin;
+
+  // ---- IMU / horyzont ----
+  // orientacja WYZEROWANA z regulatora (/rov/attitude: roll + = prawa burta w dol, pitch + = dziob w gore, yaw + = w lewo)
+  let roll = 0, pitch = 0, attT = 0;
+  T('/rov/attitude', 'geometry_msgs/msg/Vector3', { throttle_rate: 50 }).subscribe(m => {
+    roll = m.x; pitch = m.y; attT = Date.now();
+    $('roll').textContent = m.x.toFixed(1) + '°'; $('pitch').textContent = m.y.toFixed(1) + '°'; $('yaw').textContent = m.z.toFixed(1) + '°';
+    drawHorizon();
+  });
+  function onImu(m) {   // z surowego IMU tylko zyro; katy z /rov/attitude (po zerowaniu)
+    const g = m.angular_velocity; $('gyro').textContent = `${(g.x*57.3).toFixed(0)} ${(g.y*57.3).toFixed(0)} ${(g.z*57.3).toFixed(0)} °/s (osie czujnika)`;
+    if (Date.now() - attT > 2000) { $('roll').textContent = $('pitch').textContent = $('yaw').textContent = 'brak regulatora'; }
+  }
+  function drawHorizon() {
+    const c = $('horizon'), ctx = c.getContext('2d'), w = c.width, h = c.height;
+    // roll + = prawa burta w dol -> horyzont obraca sie w prawo; pitch + = dziob w gore -> horyzont w dol
+    ctx.save(); ctx.clearRect(0,0,w,h); ctx.translate(w/2, h/2); ctx.rotate(roll * Math.PI/180);
+    const off = pitch * 2.5;
+    ctx.fillStyle = '#2b6cb0'; ctx.fillRect(-w, -h*2 + off, 2*w, 2*h);
+    ctx.fillStyle = '#8b5a2b'; ctx.fillRect(-w, off, 2*w, 2*h);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-w, off); ctx.lineTo(w, off); ctx.stroke();
+    ctx.lineWidth = 1; for (let d = -30; d <= 30; d += 10) { if (!d) continue; const y = off - d*2.5; ctx.beginPath(); ctx.moveTo(-20, y); ctx.lineTo(20, y); ctx.stroke(); }
+    ctx.restore();
+    ctx.strokeStyle = '#ffd500'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(w/2-40, h/2); ctx.lineTo(w/2-10, h/2); ctx.moveTo(w/2+10, h/2); ctx.lineTo(w/2+40, h/2); ctx.stroke();
+  }
+  drawHorizon();
+
+  // ---- ARM / gain ----
+  function setArmed(v, fromMixer=false) {
+    armed = v;
+    $('arm').textContent = v ? 'ARMED' : 'DISARMED'; $('arm').className = v ? 'armed' : '';
+    if (!fromMixer) { pubArm.publish(new ROSLIB.Message({ data: v })); log(v ? 'ARM' : 'DISARM'); }
+  }
+  $('arm').onclick = () => setArmed(!armed);
+  function setGain(g) { gain = Math.max(0, Math.min(1, g)); $('gain').value = gain; $('gain-v').textContent = gain.toFixed(2); pubGain.publish(new ROSLIB.Message({ data: gain })); }
+  $('gain').oninput = e => setGain(parseFloat(e.target.value));
+
+  // ---- ESC / serwisy ----
+  const esc = (mask, command, repeat=0) => { pubEsc.publish(new ROSLIB.Message({ motor_mask: mask, command, repeat })); log(`EscCommand mask=${mask} cmd=${command} rep=${repeat}`); };
+  const allStopped = () => !tlm || tlm.dshot_value.every(v => v === 0);
+  $('b-stop').onclick = () => { setArmed(false); esc(255, 110); };
+  $('b-beep').onclick = () => allStopped() ? esc(255, 1, 1) : log('beep: najpierw zatrzymaj silniki');
+  $('b-3don').onclick = () => { if (!allStopped()) return log('3D: najpierw zatrzymaj silniki'); esc(255, 10); setTimeout(() => esc(255, 102, 1), 300); setTimeout(() => esc(255, 12), 600); };
+  $('b-3doff').onclick = () => { if (!allStopped()) return log('3D: najpierw zatrzymaj silniki'); esc(255, 9); setTimeout(() => esc(255, 102, 0), 300); setTimeout(() => esc(255, 12), 600); };
+  $('b-cz').onclick = () => esc(255, 103);
+  $('b-poles').onclick = () => { const p = parseInt(prompt('liczba biegunow silnika', tlm ? tlm.poles : 14)); if (p >= 2 && p <= 64) esc(255, 100, p); };
+  $('b-p0').onclick = () => srvP0.callService(new ROSLIB.ServiceRequest({}), r => log('depth/zero: ' + r.message));
+  $('b-imucal').onclick = () => srvCal.callService(new ROSLIB.ServiceRequest({}), r => log('imu/calibrate: ' + r.message));
+
+  // ---- klawiatura ----
+  window.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT') return;
+    keys[e.code] = true;
+    if (e.code === 'Space') { e.preventDefault(); setArmed(false); }
+    if (e.code === 'Enter') setArmed(true);
+  });
+  window.addEventListener('keyup', e => { keys[e.code] = false; });
+  window.addEventListener('blur', () => { keys = {}; });
+
+  // ---- gamepad ----
+  window.addEventListener('gamepadconnected', e => { padIndex = e.gamepad.index; setPill('st-pad', 'pad: ' + e.gamepad.id.slice(0, 24), 'ok'); log('pad: ' + e.gamepad.id); });
+  window.addEventListener('gamepaddisconnected', () => { padIndex = null; setPill('st-pad', 'pad: brak', ''); setArmed(false); });
+  const dz = (v, d=0.08) => Math.abs(v) < d ? 0 : (v - Math.sign(v)*d) / (1 - d);
+  const expo = (v, k=0.3) => (1-k)*v + k*v*v*v;
+  function readPad() {
+    const gp = navigator.getGamepads && navigator.getGamepads()[padIndex];
+    if (!gp) return null;
+    const a = gp.axes, b = gp.buttons.map(x => x.pressed);
+    const edge = i => b[i] && !padPrev[i];
+    if (edge(0)) setArmed(true);                   // A
+    if (edge(1)) setArmed(false);                  // B
+    if (edge(4)) setGain(gain - 0.05);             // LB
+    if (edge(5)) setGain(gain + 0.05);             // RB
+    padPrev = b;
+    return { surge: expo(dz(-a[1])), sway: expo(dz(-a[0])), yaw: expo(dz(-a[2])), heave: expo(dz(-a[3])), roll: 0, pitch: 0 };
+  }
+
+  // ---- petla sterowania 20 Hz ----
+  setInterval(() => {
+    const pad = readPad();
+    if (pad) cmd = pad;
+    else {
+      const k = c => keys[c] ? 1 : 0;
+      cmd = { surge: k('KeyW') - k('KeyS'), sway: k('KeyA') - k('KeyD'), yaw: k('KeyQ') - k('KeyE'), heave: k('KeyR') - k('KeyF'), roll: 0, pitch: 0 };
+    }
+    AX.forEach(n => $('a-' + n).textContent = cmd[n].toFixed(2));
+    if (ros.isConnected) pubCmd.publish(new ROSLIB.Message({
+      linear: { x: cmd.surge, y: cmd.sway, z: cmd.heave }, angular: { x: cmd.roll, y: cmd.pitch, z: cmd.yaw } }));
+    // watchdog wyswietlania
+    const now = Date.now();
+    if (now - lastTlm > 1500) setPill('st-pico', 'Pico: brak telemetrii', 'bad');
+    if (now - lastMixer > 1500) setPill('st-mixer', 'mikser: brak', 'bad');
+    const w = [];
+    if (tlm && !tlm.mode_3d && armed) w.push('ESC bez trybu 3D: ujemny gaz (wstecz/dol) jest obcinany do 0. Uzyj "3D ON + save" przy stojacych silnikach.');
+    if (tlm && tlm.failsafe && armed) w.push('Pico zglasza failsafe (brak /rov/thrusters?).');
+    $('warn').textContent = w.join(' ');
+  }, 50);
+
+  // pierwsze ustawienie gain po polaczeniu
+  ros.on('connection', () => setTimeout(() => setGain(gain), 500));
+})();
+</script>
+</body>
+</html>
