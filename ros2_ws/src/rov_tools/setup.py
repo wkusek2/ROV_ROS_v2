@@ -16,5 +16,5 @@ setup(
     maintainer_email="wkusek2@gmail.com",
     description="Narzedzia CLI ROV",
     license="GPL-3.0",
-    entry_points={"console_scripts": ["rov = rov_tools.rov_cli:main"]},
+    entry_points={"console_scripts": ["rov = rov_tools.rov_cli:main", "rov_bag = rov_tools.rov_bag:main"]},
 )

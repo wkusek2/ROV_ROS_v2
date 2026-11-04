@@ -117,6 +117,14 @@ Parametry w launchu: `sensor_id` (0 = CAM1 przy jednej kamerze), `sensor_mode` (
 `quality`, `flip` (2 = obrot 180), `ros_fps`. GUI ma podglad, zdjecie, nagrywanie, suwak ostrosci i AF.
 CAM0 ma uszkodzona tasme (stan z 2026-10-21) - po wymianie druga kamera = drugi wezel z `sensor_id:=1`, `http_port:=8090`, `vcm_bus:=9`.
 
+FPS/rozdzielczosc z launchu: `cam_mode` (0=4608x2592@14, 1=2304x1296@55, 2=1536x864@90), `cam_fps` (domyslnie 50),
+`cam_width`/`cam_height` (1280x720), `cam_quality` (60). Np. `ros2 launch rov_bringup rov.launch.py cam_mode:=2 cam_fps:=90`.
+720p50 q60 to ok. 70-80 Mbit/s na kazdego klienta strumienia (GUI + nagrywanie na PC = 2x).
+
+**Nagrywanie na PC (na biezaco):** `python3 scripts/pc_record.py --host 192.168.1.108` - bez ROS, zapis 1:1 bez rekompresji do
+`~/rov_recordings/rov_*.mjpeg` + `.csv` (nr klatki, czas Jetsona `X-Timestamp`, czas PC), pliki co 10 min, auto-reconnect,
+limit `--max-gb 50`. Odtwarzanie `ffplay -f mjpeg plik.mjpeg`.
+
 ## Czujnik zalania, SSR, ring LED - patrz `docs/czujnik_zalania_4093.md` i naglowek `pico_bms/main.c`
 
 ## Stabilizacja (rov_control/attitude_controller.py)

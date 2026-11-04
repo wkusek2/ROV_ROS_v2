@@ -10,6 +10,8 @@ Wejscia:  /rov/cmd_vel  geometry_msgs/Twist, zakres -1..1, semantyka jak w GUI:
           /rov/mixer/config String JSON {"slots": {"FLU": {"motor": 5, "inv": false}, ...}}  (ktory silnik M1-8 siedzi w ktorej pozycji)
           /rov/thruster_test String JSON {"motor": 1, "value": 0.15, "duration": 2}  albo  {"dof": "heave", "value": 0.15, "duration": 2}
 Wyjscie:  /rov/thrusters (20 Hz, zawsze), /rov/control/status String JSON (armed, gain, thrust, f_N, slots, alloc, test)
+          /rov/debug/mixer String JSON co tick (do analizy z bagow): src (pilot/test/disarmed/timeout), armed, gain, cmd_age,
+             cmd[6] (wejscie -1..1), tau[6] (zadane X Y Z K M N, N/Nm), f[8] (sily po saturacji, kolejnosc al.NAMES), sat, thr[8] (M1..M8)
 Sloty: FLU FRU RLU RRU (gorne) FLD FRD RLD RRD (dolne) = pedniki PGL PGP TGL TGP PDL PDP TDL TDP z allocation.py.
 """
 import json
@@ -60,7 +62,7 @@ class ThrusterMixer(Node):
             self.get_logger().error("macierz B nie ma rzedu 6 - nie wszystkie DOF sterowalne!")
 
         self.armed = False; self.cmd = [0.0] * 6; self.cmd_time = 0.0
-        self.thrust = [0.0] * 8; self.f_N = [0.0] * 8; self.sat_scale = 1.0
+        self.thrust = [0.0] * 8; self.f_N = [0.0] * 8; self.sat_scale = 1.0; self.tau = [0.0] * 6
         self.test = None   # (thrust[8], until, opis)
         self.slots = {s: {"motor": DEFAULT_SLOTS.get(s, 0), "inv": False} for s in SLOTS}
         self.load_config(); self.build_map()
@@ -74,6 +76,7 @@ class ThrusterMixer(Node):
         self.create_subscription(String, "/rov/thruster_test", self.on_test, 10)
         self.pub_thr = self.create_publisher(ThrusterCommand, "/rov/thrusters", 10)
         self.pub_status = self.create_publisher(String, "/rov/control/status", 10)
+        self.pub_dbg = self.create_publisher(String, "/rov/debug/mixer", 10)
         self.create_timer(1.0 / float(g("rate_hz")), self.tick)
         self.create_timer(0.2, self.publish_status)
 
@@ -119,6 +122,7 @@ class ThrusterMixer(Node):
         for k, ax in enumerate(AXES):
             dof, sgn = DOF_OF_AXIS[ax]
             tau[al.DOF.index(dof)] = sgn * cmd[k] * self.tau_max[dof] * gain
+        self.tau = [round(float(v), 3) for v in tau]
         f = al.allocate(self.Bp, tau)
         f, scale, _ = al.saturate(f, self.f_fwd, self.f_rev)
         return al.force_to_cmd(f, self.f_fwd, self.f_rev, self.expo), f, scale
@@ -179,14 +183,20 @@ class ThrusterMixer(Node):
         if self.test and now >= self.test[1]:
             self.test = None
         if self.test and not self.armed:
-            self.thrust = list(self.test[0]); self.f_N = [0.0] * 8; self.sat_scale = 1.0
+            self.thrust = list(self.test[0]); self.f_N = [0.0] * 8; self.sat_scale = 1.0; self.tau = [0.0] * 6; src = "test"
         elif self.armed and (now - self.cmd_time) < self.timeout:
             c8, f, scale = self.allocate_cmd(self.cmd, self.gain)
-            self.thrust = self.to_motors(c8); self.f_N = [round(float(v), 2) for v in f]; self.sat_scale = scale
+            self.thrust = self.to_motors(c8); self.f_N = [round(float(v), 2) for v in f]; self.sat_scale = scale; src = "pilot"
         else:
-            self.thrust = [0.0] * 8; self.f_N = [0.0] * 8; self.sat_scale = 1.0
+            self.thrust = [0.0] * 8; self.f_N = [0.0] * 8; self.sat_scale = 1.0; self.tau = [0.0] * 6
+            src = "timeout" if self.armed else "disarmed"
         msg = ThrusterCommand(); msg.throttle = [float(v) for v in self.thrust]
         self.pub_thr.publish(msg)
+        age = now - self.cmd_time if self.cmd_time else -1.0
+        self.pub_dbg.publish(String(data=json.dumps({
+            "src": src, "armed": self.armed, "gain": round(self.gain, 3), "cmd_age": round(age, 3),
+            "cmd": [round(v, 3) for v in self.cmd], "tau": self.tau, "f": self.f_N, "sat": round(float(self.sat_scale), 3),
+            "thr": [round(v, 4) for v in self.thrust], "test": self.test[2] if self.test else None}, separators=(",", ":"))))
 
     def publish_status(self):
         age = time.monotonic() - self.cmd_time if self.cmd_time else None

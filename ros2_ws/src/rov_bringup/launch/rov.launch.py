@@ -15,6 +15,7 @@ from launch.actions import DeclareLaunchArgument, ExecuteProcess
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -36,12 +37,19 @@ def generate_launch_description():
         DeclareLaunchArgument("bms", default_value="true"),
         DeclareLaunchArgument("camera", default_value="true"),
         DeclareLaunchArgument("record", default_value="true", description="ciagle nagrywanie bagow do ~/nowy_rov/logs/bags"),
+        DeclareLaunchArgument("bag_max_gb", default_value="6", description="limit miejsca na bagi; najstarsze kasowane"),
         DeclareLaunchArgument("agents", default_value="true", description="agenty micro-ROS (false na laptopie bez Pico)"),
         DeclareLaunchArgument("sim", default_value="false", description="symulator obu Pico (testy bez pojazdu)"),
         DeclareLaunchArgument("verbosity", default_value="4"),
         DeclareLaunchArgument("gui", default_value="true"),
         DeclareLaunchArgument("mixer", default_value="true"),
         DeclareLaunchArgument("http_port", default_value="8088"),
+        # kamera IMX708 (Arducam): cam_mode 0=4608x2592@14, 1=2304x1296@55, 2=1536x864@90
+        DeclareLaunchArgument("cam_mode", default_value="1"),
+        DeclareLaunchArgument("cam_fps", default_value="50"),
+        DeclareLaunchArgument("cam_width", default_value="1280"),
+        DeclareLaunchArgument("cam_height", default_value="720"),
+        DeclareLaunchArgument("cam_quality", default_value="60"),
         Node(
             package="micro_ros_agent",
             executable="micro_ros_agent",
@@ -96,8 +104,13 @@ def generate_launch_description():
             executable="camera_node",
             name="camera",
             output="screen",
-            parameters=[{"sensor_id": 0, "sensor_mode": 1, "width": 1280, "height": 720, "fps": 30,
-                         "quality": 60, "http_port": 8089, "ros_fps": 5.0, "vcm_bus": 10, "flip": 0}],
+            parameters=[{"sensor_id": 0,
+                         "sensor_mode": ParameterValue(LaunchConfiguration("cam_mode"), value_type=int),
+                         "width": ParameterValue(LaunchConfiguration("cam_width"), value_type=int),
+                         "height": ParameterValue(LaunchConfiguration("cam_height"), value_type=int),
+                         "fps": ParameterValue(LaunchConfiguration("cam_fps"), value_type=int),
+                         "quality": ParameterValue(LaunchConfiguration("cam_quality"), value_type=int),
+                         "http_port": 8089, "ros_fps": 5.0, "vcm_bus": 10, "flip": 0}],
             respawn=True,
             respawn_delay=3.0,
             condition=IfCondition(LaunchConfiguration("camera")),
@@ -133,6 +146,7 @@ def generate_launch_description():
             cmd=["bash", os.path.join(get_package_share_directory("rov_bringup"), "scripts", "record_bags.sh")],
             name="bag_recorder",
             output="screen",
+            additional_env={"MAX_GB": LaunchConfiguration("bag_max_gb")},
             respawn=True,
             respawn_delay=5.0,
             condition=IfCondition(LaunchConfiguration("record")),

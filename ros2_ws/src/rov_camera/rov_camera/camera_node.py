@@ -279,10 +279,12 @@ class CameraNode(Node):
                                 node_self.cond.wait(timeout=2.0)
                                 if node_self.frame_n == last:
                                     continue
-                                data, last = node_self.frame, node_self.frame_n
+                                data, last, ts = node_self.frame, node_self.frame_n, node_self.frame_t
                             if data is None:
                                 continue
-                            self.wfile.write(b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: %d\r\n\r\n" % len(data))
+                            # X-Timestamp (czas uniksowy Jetsona) i X-Frame - dla nagrywania na PC (scripts/pc_record.py)
+                            self.wfile.write(b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: %d\r\n"
+                                             b"X-Timestamp: %.6f\r\nX-Frame: %d\r\n\r\n" % (len(data), ts, last))
                             self.wfile.write(data); self.wfile.write(b"\r\n")
                     except (BrokenPipeError, ConnectionResetError):
                         pass

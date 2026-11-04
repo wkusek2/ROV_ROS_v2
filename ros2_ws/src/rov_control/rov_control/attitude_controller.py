@@ -10,6 +10,8 @@ Wejscia:  /rov/imu (sensor_msgs/Imu, surowe zyro rad/s i akcel m/s2 w osiach CZU
 Serwis:   /rov/imu/zero (Trigger) - aktualna orientacja = poziom (roll=pitch=0) i kurs 0
 Wyjscia:  /rov/cmd_vel (Twist -> mikser) = pilot + korekty regulatora (tylko gdy pilot nadaje; deadman miksera zostaje)
           /rov/attitude (Vector3: roll, pitch, yaw [deg] wzgledem zera), /rov/ctrl/status (String JSON, 5 Hz)
+          /rov/debug/ctrl (String JSON co tick, takze gdy pilot milczy - do analizy z bagow): pilot[6], out[6], rpy, gyro_dps,
+             acc, depth, mode, sp, imu_age, susp, pid: {os: [e, p, i, d, u, sat]} (tylko osie liczone w tym ticku)
 
 Osie: cialo FLU (x przod, y lewo, z gora). Mapowanie osi czujnika -> cialo parametrem imu_axes, np. "x,z,-y"
 (cialo_x = sensor_x, cialo_y = sensor_z, cialo_z = -sensor_y). Semantyka komend jak w mikserze:
@@ -49,6 +51,7 @@ class PID:
     def __init__(self, kp, ki, kd, out_lim=1.0, i_lim=0.3):
         self.kp, self.ki, self.kd, self.out_lim, self.i_lim = kp, ki, kd, out_lim, i_lim
         self.i = 0.0; self.prev_e = None; self.saturated = False
+        self.last = None              # (e, p, i, d, u) z ostatniego step() - do /rov/debug/ctrl
 
     def reset(self):
         self.i = 0.0; self.prev_e = None; self.saturated = False
@@ -63,7 +66,9 @@ class PID:
             self.i = max(-self.i_lim, min(self.i_lim, self.i + self.ki * e * dt))
         u = self.kp * e + self.i + self.kd * d
         self.saturated = abs(u) >= self.out_lim
-        return max(-self.out_lim, min(self.out_lim, u))
+        u = max(-self.out_lim, min(self.out_lim, u))
+        self.last = (e, self.kp * e, self.i, self.kd * d, u)
+        return u
 
 
 def wrap(a):
@@ -108,6 +113,7 @@ class AttitudeController(Node):
         self.pub_cmd = self.create_publisher(Twist, "/rov/cmd_vel", 10)
         self.pub_att = self.create_publisher(Vector3, "/rov/attitude", 10)
         self.pub_st = self.create_publisher(String, "/rov/ctrl/status", 10)
+        self.pub_dbg = self.create_publisher(String, "/rov/debug/ctrl", 10)
         self.create_timer(1.0 / float(g("rate_hz")), self.tick)
         self.create_timer(0.2, self.publish_status)
         self.get_logger().info(f"imu_axes={g('imu_axes')}  regulator: {list(self.pid)}")
@@ -212,7 +218,10 @@ class AttitudeController(Node):
     # ---- petla regulacji ----
     def tick(self):
         now = time.monotonic()
+        for p in self.pid.values():
+            p.last = None
         if not self.pilot_t or now - self.pilot_t > self.pilot_timeout:
+            self.publish_debug(now, None)
             return                                 # pilot milczy -> nic nie publikujemy -> mikser zeruje (deadman)
         dt = 1.0 / 20.0
         out = list(self.pilot)
@@ -255,6 +264,16 @@ class AttitudeController(Node):
         t.linear.x, t.linear.y, t.linear.z = out[0], out[1], out[2]
         t.angular.x, t.angular.y, t.angular.z = out[3], out[4], out[5]
         self.pub_cmd.publish(t)
+        self.publish_debug(now, out)
+
+    def publish_debug(self, now, out):
+        r = lambda v, n=4: round(float(v), n)  # noqa: E731
+        d = {"active": out is not None, "pilot": [r(v) for v in self.pilot], "out": [r(v) for v in out] if out else None,
+             "rpy": [r(v, 3) for v in self.rpy], "gyro_dps": [r(math.degrees(v), 3) for v in self.gyro_b],
+             "acc": [r(v) for v in self.acc_b], "depth": self.depth, "mode": self.mode, "sp": self.sp,
+             "imu_age": r(now - self.imu_t, 3) if self.imu_t else None, "susp": self.suspended,
+             "pid": {k: [r(x, 5) for x in p.last] + [p.saturated] for k, p in self.pid.items() if p.last}}
+        self.pub_dbg.publish(String(data=json.dumps(d, separators=(",", ":"))))
 
     def publish_status(self):
         now = time.monotonic()

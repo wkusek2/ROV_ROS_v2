@@ -64,6 +64,9 @@ def parse_mask(s: str) -> int:
 class Cli(Node):
     def __init__(self):
         super().__init__("rov_cli")
+        from std_msgs.msg import String as _S
+        self._audit_cls = _S
+        self.pub_audit = self.create_publisher(_S, "/rov/audit", 10)
         self.pub_thr = self.create_publisher(ThrusterCommand, "/rov/thrusters", 10)
         self.pub_cmd = self.create_publisher(EscCommand, "/rov/esc/command", 10)
         self.tlm = None
@@ -220,14 +223,27 @@ class Cli(Node):
                 return
             time.sleep(1.0)
 
+    def audit(self, **d):
+        """Wpis do /rov/audit (nagrywany w bagach). Czeka chwile na odkrycie przez recorder, zeby wpis nie przepadl."""
+        import json as _json
+        t0 = time.time()
+        while self.pub_audit.get_subscription_count() == 0 and time.time() - t0 < 0.7:
+            rclpy.spin_once(self, timeout_sec=0.05)
+        d = {"src": "cli", "t": time.time(), **d}
+        self.pub_audit.publish(self._audit_cls(data=_json.dumps(d, default=str)))
+
     def call_trigger(self, name):
         cl = self.create_client(Trigger, name)
         if not cl.wait_for_service(timeout_sec=3.0):
             print(f"serwis {name} niedostepny")
+            self.audit(ev="err", srv=name, err="niedostepny")
             return
+        self.audit(ev="call", srv=name)
         fut = cl.call_async(Trigger.Request())
         rclpy.spin_until_future_complete(self, fut, timeout_sec=3.0)
-        print(fut.result().message if fut.result() else "brak odpowiedzi")
+        r = fut.result()
+        self.audit(ev="resp" if r else "err", srv=name, resp={"success": r.success, "message": r.message} if r else None)
+        print(r.message if r else "brak odpowiedzi")
 
 
 STOP = False
@@ -250,6 +266,8 @@ def main():
     signal.signal(signal.SIGTERM, _on_sigint)
     n = Cli()
     c = args[0].lower()
+    if c not in ("status", "watch", "att", "alloc", "bms", "leak", "events", "logs", "bags", "diag") or len(args) > 1 and c == "leak":
+        n.audit(ev="cli", argv=args)          # komendy zmieniajace stan (odczyty pomijamy)
     try:
         if c == "status":
             n.wait_data()

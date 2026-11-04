@@ -247,6 +247,19 @@
   ros.on('connection', () => { setPill('st-ws', 'rosbridge: OK', 'ok'); log('rosbridge polaczony'); });
   ros.on('close', () => { setPill('st-ws', 'rosbridge: brak', 'bad'); setArmed(false, true); setTimeout(() => ros.connect(`ws://${host}:9090`), 2000); });
   ros.on('error', () => {});
+  // audyt: kazde wywolanie serwisu z GUI (zadanie + odpowiedz/blad) -> /rov/audit (String JSON), nagrywane w bagach
+  const auditPub = new ROSLIB.Topic({ ros, name: '/rov/audit', messageType: 'std_msgs/String' });
+  const sid = Math.random().toString(36).slice(2, 8);
+  const audit = (o) => { try { auditPub.publish({ data: JSON.stringify(Object.assign({ src: 'gui', sid, t: Date.now() / 1000 }, o)) }); } catch (e) {} };
+  const _call = ROSLIB.Service.prototype.callService;
+  ROSLIB.Service.prototype.callService = function (req, cb, err) {
+    const name = this.name, id = Math.random().toString(36).slice(2, 8);
+    audit({ ev: 'call', srv: name, id, req });
+    return _call.call(this, req,
+      (r) => { audit({ ev: 'resp', srv: name, id, resp: r }); if (cb) cb(r); },
+      (e) => { audit({ ev: 'err', srv: name, id, err: String(e) }); if (err) err(e); });
+  };
+  ros.on('connection', () => audit({ ev: 'connect', ua: navigator.userAgent }));
 
   const T = (name, type, opts={}) => new ROSLIB.Topic(Object.assign({ ros, name, messageType: type }, opts));
   const pubCmd  = T('/rov/cmd_vel_pilot', 'geometry_msgs/msg/Twist');   // -> attitude_controller -> /rov/cmd_vel -> mikser

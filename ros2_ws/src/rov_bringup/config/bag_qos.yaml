@@ -1,0 +1,93 @@
+# QoS recordera (ros2 bag record --qos-profile-overrides-path) dla topikow, ktore publikuje kilku wydawcow o roznym QoS
+# (rosbridge = TRANSIENT_LOCAL, CLI/wezly = VOLATILE). Bez tego rosbag2 dopasowuje sie do pierwszego wydawcy i GUBI
+# wiadomosci od pozostalych. best_effort + volatile jest zgodne z kazdym wydawca; depth duze, zeby nic nie wypadlo.
+/rov/cmd_vel_pilot:
+  history: keep_last
+  depth: 200
+  reliability: best_effort
+  durability: volatile
+/rov/cmd_vel:
+  history: keep_last
+  depth: 200
+  reliability: best_effort
+  durability: volatile
+/rov/cmd_vel_reliable:
+  history: keep_last
+  depth: 200
+  reliability: best_effort
+  durability: volatile
+/rov/arm:
+  history: keep_last
+  depth: 200
+  reliability: best_effort
+  durability: volatile
+/rov/gain:
+  history: keep_last
+  depth: 200
+  reliability: best_effort
+  durability: volatile
+/rov/thrusters:
+  history: keep_last
+  depth: 200
+  reliability: best_effort
+  durability: volatile
+/rov/ctrl/mode:
+  history: keep_last
+  depth: 200
+  reliability: best_effort
+  durability: volatile
+/rov/ctrl/setpoint:
+  history: keep_last
+  depth: 200
+  reliability: best_effort
+  durability: volatile
+/rov/ctrl/gains:
+  history: keep_last
+  depth: 200
+  reliability: best_effort
+  durability: volatile
+/rov/mixer/config:
+  history: keep_last
+  depth: 200
+  reliability: best_effort
+  durability: volatile
+/rov/thruster_test:
+  history: keep_last
+  depth: 200
+  reliability: best_effort
+  durability: volatile
+/rov/esc/command:
+  history: keep_last
+  depth: 200
+  reliability: best_effort
+  durability: volatile
+/rov/audit:
+  history: keep_last
+  depth: 200
+  reliability: best_effort
+  durability: volatile
+/rov/led:
+  history: keep_last
+  depth: 200
+  reliability: best_effort
+  durability: volatile
+/rov/power:
+  history: keep_last
+  depth: 200
+  reliability: best_effort
+  durability: volatile
+/rov/leak/reset:
+  history: keep_last
+  depth: 200
+  reliability: best_effort
+  durability: volatile
+/rov/camera/focus:
+  history: keep_last
+  depth: 200
+  reliability: best_effort
+  durability: volatile
+/rov/sim/leak:
+  history: keep_last
+  depth: 200
+  reliability: best_effort
+  durability: volatile
