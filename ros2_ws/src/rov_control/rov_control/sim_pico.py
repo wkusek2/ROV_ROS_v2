@@ -113,15 +113,15 @@ class SimPico(Node):
                 c = t[m] * sgn
                 f[i] = c * (self.f_max[0] if c >= 0 else self.f_max[1])
         tau = self.B @ f                       # [X Y Z K M N] w FRD (N, Nm)
-        # FRD -> konwencja komend: roll + = prawa burta w dol (= +K), pitch + = dziob w gore (= -M), yaw + = w lewo (= -N), heave + = gora (= -Z)
+        # FRD -> konwencja komend: roll + = prawa burta w dol (= +K), pitch + = dziob w gore (= +M), yaw + = w lewo (= -N), heave + = gora (= -Z)
         I_rot, kd = 2.5, 1.5                   # bezwladnosc [kg m2] i tlumienie - zgrubnie (ROV ~25 kg)
         self.rates[0] += (tau[3] / I_rot - kd * self.rates[0]) * dt
-        self.rates[1] += (-tau[4] / I_rot - kd * self.rates[1]) * dt
+        self.rates[1] += (tau[4] / I_rot - kd * self.rates[1]) * dt
         self.rates[2] += (-tau[5] / I_rot - kd * self.rates[2]) * dt
         self.vz += (-tau[2] / 25.0 - 0.8 * self.vz) * dt   # masa 25 kg
         self.depth = max(0.0, self.depth - self.vz * dt)
-        # calkowanie kwaternionu (cialo FLU; roll + = prawa burta w dol = obrot ujemny wokol x)
-        wx, wy, wz = -self.rates[0], -self.rates[1], self.rates[2]
+        # calkowanie kwaternionu (cialo FLU; roll + = prawa burta w dol = obrot DODATNI wokol x, pitch + = dziob w gore = ujemny wokol y)
+        wx, wy, wz = self.rates[0], -self.rates[1], self.rates[2]
         w, x, y, z = self.q
         dq = (1.0, 0.5 * dt * wx, 0.5 * dt * wy, 0.5 * dt * wz)
         q = [w * dq[0] - x * dq[1] - y * dq[2] - z * dq[3], w * dq[1] + x * dq[0] + y * dq[3] - z * dq[2],

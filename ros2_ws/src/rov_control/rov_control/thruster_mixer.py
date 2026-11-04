@@ -4,7 +4,8 @@
 Wejscia:  /rov/cmd_vel  geometry_msgs/Twist, zakres -1..1, semantyka jak w GUI:
              linear.x = surge (+ przod), linear.y = sway (+ w LEWO), linear.z = heave (+ do GORY),
              angular.x = roll (+ prawa burta w dol), angular.y = pitch (+ dziob w gore), angular.z = yaw (+ w lewo)
-          Przeliczenie na tau FRD [X Y Z K M N]: X=surge, Y=-sway, Z=-heave, K=roll, M=-pitch, N=-yaw,
+          Przeliczenie na tau FRD [X Y Z K M N]: X=surge, Y=-sway, Z=-heave, K=roll, M=pitch, N=-yaw
+          (Fossen FRD: K+ = prawa burta w dol, M+ = dziob w GORE, N+ = dziob w prawo; patrz docs/stabilizacja/),
           kazda os skalowana przez tau_max tej osi (max osiagalne przy limitach pednikow) i przez gain.
           /rov/arm Bool, /rov/gain Float32
           /rov/mixer/config String JSON {"slots": {"FLU": {"motor": 5, "inv": false}, ...}}  (ktory silnik M1-8 siedzi w ktorej pozycji)
@@ -33,7 +34,7 @@ SLOTS = ("FLU", "FRU", "RLU", "RRU", "FLD", "FRD", "RLD", "RRD")
 DEFAULT_SLOTS = {"FRD": 1, "FLD": 2, "RRD": 3, "RLD": 4, "FRU": 5, "FLU": 6, "RRU": 7, "RLU": 8}
 CONFIG_FILE = os.path.expanduser("~/nowy_rov/config/thrusters.json")
 TEST_MAX, TEST_MAX_S = 0.3, 3.0
-DOF_OF_AXIS = {"surge": ("X", 1), "sway": ("Y", -1), "heave": ("Z", -1), "roll": ("K", 1), "pitch": ("M", -1), "yaw": ("N", -1)}
+DOF_OF_AXIS = {"surge": ("X", 1), "sway": ("Y", -1), "heave": ("Z", -1), "roll": ("K", 1), "pitch": ("M", 1), "yaw": ("N", -1)}
 
 
 class ThrusterMixer(Node):

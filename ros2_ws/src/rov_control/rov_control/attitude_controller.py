@@ -153,8 +153,9 @@ class AttitudeController(Node):
         roll = math.degrees(math.atan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y)))
         pitch = math.degrees(math.asin(max(-1.0, min(1.0, 2 * (w * y - z * x)))))
         yaw = math.degrees(math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z)))
-        # konwencja komend: roll + = prawa burta w dol (obrot ujemny wokol x FLU), pitch + = dziob w gore (obrot ujemny wokol y FLU), yaw + = w lewo (+z)
-        return [-roll, -pitch, yaw]
+        # konwencja komend: roll + = prawa burta w dol (= obrot DODATNI wokol x FLU: y(lewo) -> z(gora), wiec lewa burta w gore),
+        # pitch + = dziob w gore (obrot ujemny wokol y FLU), yaw + = w lewo (+z). Weryfikacja: rov_control/test/sign_check.py
+        return [roll, -pitch, yaw]
 
     def srv_zero(self, req, res):
         if not self.n_imu:
@@ -245,7 +246,7 @@ class AttitudeController(Node):
             else:
                 if self.suspended["level"]:
                     self.suspended["level"] = False; self.pid["roll"].reset(); self.pid["pitch"].reset()
-                cr = self.pid["roll"].step(self.sp["roll_deg"] - self.rpy[0], dt, rate=-gx)
+                cr = self.pid["roll"].step(self.sp["roll_deg"] - self.rpy[0], dt, rate=gx)
                 cp = self.pid["pitch"].step(self.sp["pitch_deg"] - self.rpy[1], dt, rate=-gy)
         self.corr["roll"], self.corr["pitch"] = cr, cp
         out[3] = clamp(out[3] + cr); out[4] = clamp(out[4] + cp)

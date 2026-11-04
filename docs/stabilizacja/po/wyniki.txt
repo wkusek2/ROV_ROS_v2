@@ -1,0 +1,32 @@
+TESTY ZNAKOW (obecny kod)
+  OK  pilot_pitch  moment M = +18.8 Nm  ->  dziob idzie W GORE
+  OK  pilot_roll   moment K = +5.6 Nm  ->  prawa burta idzie W DOL
+  OK  pilot_yaw    moment N = -29.9 Nm  ->  dziob idzie W LEWO
+  OK  tilt_roll    regulator odczytal roll = +9.8 st. (+ = prawa w dol) | K = -2.20 Nm -> prawa burta wraca W GORE (dobrze)
+  OK  tilt_pitch   regulator odczytal pitch = +9.8 st. (+ = dziob w gore) | M = -7.41 Nm -> dziob wraca W DOL (dobrze)
+
+ZAMKNIETA PETLA (max |kat|, kat koncowy, koniec symulacji; koniec < T = wywrotka > 85 st.)
+  roll        STARY  gain 0.3 roll   max   45.6  koniec   23.7  t_end  12.0 s
+  roll        STARY  gain 1.0 roll   max   85.1  koniec   85.1  t_end   2.1 s
+  roll        OBECNY gain 0.3 roll   max   29.0  koniec   -0.4  t_end  12.0 s
+  roll        OBECNY gain 1.0 roll   max   20.3  koniec   -0.3  t_end  12.0 s
+  pitch       STARY  gain 0.3 pitch  max   85.1  koniec   85.1  t_end   2.4 s
+  pitch       STARY  gain 1.0 pitch  max   85.4  koniec   85.4  t_end   1.7 s
+  pitch       OBECNY gain 0.3 pitch  max   22.9  koniec   -0.4  t_end  12.0 s
+  pitch       OBECNY gain 1.0 pitch  max   12.2  koniec   -0.2  t_end  12.0 s
+  yaw         STARY  gain 0.3 yaw    max   15.3  koniec    0.3  t_end  12.0 s
+  yaw         STARY  gain 1.0 yaw    max    6.7  koniec    0.1  t_end  10.4 s
+  yaw         OBECNY gain 0.3 yaw    max   15.3  koniec    0.3  t_end  12.0 s
+  yaw         OBECNY gain 1.0 yaw    max    6.7  koniec    0.1  t_end  12.0 s
+  zanurzanie  STARY  gain 0.3 roll   max    2.2  koniec    0.8  t_end   5.1 s
+  zanurzanie  STARY  gain 0.3 pitch  max   85.1  koniec  -85.1  t_end   5.1 s
+  zanurzanie  STARY  gain 0.3 yaw    max    1.3  koniec    1.0  t_end   5.1 s
+  zanurzanie  STARY  gain 1.0 roll   max    6.3  koniec    3.8  t_end   2.6 s
+  zanurzanie  STARY  gain 1.0 pitch  max   85.2  koniec  -85.2  t_end   2.6 s
+  zanurzanie  STARY  gain 1.0 yaw    max   41.9  koniec   41.9  t_end   2.6 s
+  zanurzanie  OBECNY gain 0.3 roll   max    0.5  koniec   -0.1  t_end  12.0 s
+  zanurzanie  OBECNY gain 0.3 pitch  max    0.8  koniec    0.2  t_end  12.0 s
+  zanurzanie  OBECNY gain 0.3 yaw    max    1.4  koniec   -0.4  t_end  12.0 s
+  zanurzanie  OBECNY gain 1.0 roll   max    0.9  koniec   -0.3  t_end  12.0 s
+  zanurzanie  OBECNY gain 1.0 pitch  max    1.0  koniec    0.3  t_end  12.0 s
+  zanurzanie  OBECNY gain 1.0 yaw    max    1.5  koniec   -0.4  t_end  12.0 s
