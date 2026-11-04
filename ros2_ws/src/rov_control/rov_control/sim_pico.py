@@ -81,21 +81,44 @@ class SimPico(Node):
         if m.command == EscCommand.DSHOT_3D_OFF or (m.command == EscCommand.CMD_SET_3D and not m.repeat):
             self.mode_3d = False
 
-    # ---- dynamika (zgrubna): momenty z geometrii slotow domyslnych miksera ----
+    # ---- dynamika: tau = B f z TEJ SAMEJ geometrii i przypisania slotow co mikser (allocation.py + thrusters.json) ----
+    def _init_dyn(self):
+        import json as _json
+        import os as _os
+        from rov_control import allocation as al
+        self.B = al.build_B()
+        slots = {"FRD": 1, "FLD": 2, "RRD": 3, "RLD": 4, "FRU": 5, "FLU": 6, "RRU": 7, "RLU": 8}
+        inv = {}
+        p = self.get_parameter("thrusters_json").value or _os.path.expanduser("~/nowy_rov/config/thrusters.json")
+        try:
+            d = _json.load(open(p))["slots"]
+            slots = {k: int(v["motor"]) for k, v in d.items()}; inv = {k: bool(v.get("inv")) for k, v in d.items()}
+        except Exception:
+            pass
+        self.motor_of = []   # dla kazdego pednika geometrycznego (al.NAMES): (indeks silnika, znak)
+        for name in al.NAMES:
+            s = al.SLOT_OF[name]; m = slots.get(s, 0)
+            self.motor_of.append((m - 1 if 1 <= m <= 8 else -1, -1.0 if inv.get(s) else 1.0))
+        self.f_max = (40.0, 30.0)
+
     def step_imu(self):
+        import numpy as np
+        if not hasattr(self, "B"):
+            self._init_dyn()
         dt = 0.02
         t = self.thr if time.time() - self.cmd_t < 0.5 else [0.0] * 8
-        # domyslne sloty: FRD=1 FLD=2 RRD=3 RLD=4 FRU=5 FLU=6 RRU=7 RLU=8 (indeksy 0..7)
-        frd, fld, rrd, rld, fru, flu, rru, rlu = t
-        yaw_t = (fld + rld) - (frd + rrd)            # lewe poziome do przodu -> obrot w prawo? znak umowny: + = w lewo
-        roll_t = (fru + rru) - (flu + rlu)           # prawe gorne w gore -> prawa burta w gore -> roll ujemny... umowny
-        pitch_t = (fru + flu) - (rru + rlu)          # przednie w gore -> dziob w gore (+)
-        heave = (fru + flu + rru + rlu) / 4.0
-        k = 1.5
-        self.rates[0] += (-k * roll_t - 1.0 * self.rates[0]) * dt
-        self.rates[1] += (k * pitch_t - 1.0 * self.rates[1]) * dt
-        self.rates[2] += (k * yaw_t - 0.5 * self.rates[2]) * dt
-        self.vz += (0.8 * heave - 0.6 * self.vz) * dt
+        f = np.zeros(8)
+        for i, (m, sgn) in enumerate(self.motor_of):
+            if m >= 0:
+                c = t[m] * sgn
+                f[i] = c * (self.f_max[0] if c >= 0 else self.f_max[1])
+        tau = self.B @ f                       # [X Y Z K M N] w FRD (N, Nm)
+        # FRD -> konwencja komend: roll + = prawa burta w dol (= +K), pitch + = dziob w gore (= -M), yaw + = w lewo (= -N), heave + = gora (= -Z)
+        I_rot, kd = 2.5, 1.5                   # bezwladnosc [kg m2] i tlumienie - zgrubnie (ROV ~25 kg)
+        self.rates[0] += (tau[3] / I_rot - kd * self.rates[0]) * dt
+        self.rates[1] += (-tau[4] / I_rot - kd * self.rates[1]) * dt
+        self.rates[2] += (-tau[5] / I_rot - kd * self.rates[2]) * dt
+        self.vz += (-tau[2] / 25.0 - 0.8 * self.vz) * dt   # masa 25 kg
         self.depth = max(0.0, self.depth - self.vz * dt)
         # calkowanie kwaternionu (cialo FLU; roll + = prawa burta w dol = obrot ujemny wokol x)
         wx, wy, wz = -self.rates[0], -self.rates[1], self.rates[2]

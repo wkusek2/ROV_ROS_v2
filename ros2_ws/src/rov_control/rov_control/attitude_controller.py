@@ -153,7 +153,7 @@ class AttitudeController(Node):
     def srv_zero(self, req, res):
         if not self.n_imu:
             res.success, res.message = False, "brak danych IMU"; return res
-        self.q_ref = self.q.copy()
+        self.q_ref = self.q.copy(); self.zeroed = True
         self.sp["yaw_deg"] = 0.0; self.sp["roll_deg"] = 0.0; self.sp["pitch_deg"] = 0.0
         for k in ("yaw", "roll", "pitch"):
             self.pid[k].reset()
@@ -264,7 +264,7 @@ class AttitudeController(Node):
               "suspended": self.suspended, "pilot_active": bool(self.pilot_t and now - self.pilot_t < self.pilot_timeout),
               "gains": {k: [p.kp, p.ki, p.kd] for k, p in self.pid.items()},
               "integral": {k: round(p.i, 3) for k, p in self.pid.items()}, "saturated": [k for k, p in self.pid.items() if p.saturated],
-              "zeroed": bool(np.any(self.q_ref != np.array([1.0, 0, 0, 0])))}
+              "zeroed": getattr(self, "zeroed", False)}
         self.pub_st.publish(String(data=json.dumps(st)))
 
 
