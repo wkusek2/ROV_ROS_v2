@@ -137,7 +137,7 @@ Tryby: kurs (yaw), poziom (roll/pitch), glebokosc; wektor zadany `/rov/ctrl/setp
 
 ```sh
 sudo apt install ros-humble-desktop ros-humble-rosbridge-suite python3-colcon-common-extensions python3-numpy python3-opencv
-git clone <repo> ~/ROV_ROS2 && mkdir -p ~/rov_ws/src && ln -s ~/ROV_ROS2/ros2_ws/src/* ~/rov_ws/src/
+git clone https://github.com/wkusek2/ROV_ROS_v2.git ~/ROV_ROS2 && mkdir -p ~/rov_ws/src && ln -s ~/ROV_ROS2/ros2_ws/src/* ~/rov_ws/src/
 cd ~/rov_ws && source /opt/ros/humble/setup.bash && colcon build --symlink-install && source install/setup.bash
 ros2 launch rov_bringup rov.launch.py sim:=true agents:=false camera:=false record:=false
 ```
