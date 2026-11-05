@@ -513,8 +513,10 @@
   }
   function drawHorizon() {
     const c = $('horizon'), ctx = c.getContext('2d'), w = c.width, h = c.height;
-    // roll + = prawa burta w dol -> horyzont obraca sie w prawo; pitch + = dziob w gore -> horyzont w dol
-    ctx.save(); ctx.clearRect(0,0,w,h); ctx.translate(w/2, h/2); ctx.rotate(roll * Math.PI/180);
+    // jak sztuczny horyzont w samolocie: roll + = prawa burta w dol -> horyzont obraca sie PRZECIWNIE do wskazowek zegara
+    // (prawy koniec linii w gore); pitch + = dziob w gore -> horyzont w dol. (Do 2026-11-05 byl tu +roll, co dzialalo tylko
+    // dlatego, ze regulator mial wtedy odwrocony znak roll.)
+    ctx.save(); ctx.clearRect(0,0,w,h); ctx.translate(w/2, h/2); ctx.rotate(-roll * Math.PI/180);
     const off = pitch * 2.5;
     ctx.fillStyle = '#2b6cb0'; ctx.fillRect(-w, -h*2 + off, 2*w, 2*h);
     ctx.fillStyle = '#8b5a2b'; ctx.fillRect(-w, off, 2*w, 2*h);
