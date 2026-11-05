@@ -8,10 +8,12 @@ attitude_controller:
     rate_hz: 20.0
     pilot_timeout_s: 0.5
     deadband: 0.08            # |pilot| powyzej -> regulator tej osi odpuszcza i po puszczeniu przejmuje biezacy stan
-    i_limit: 0.3              # anty-windup: maks. wklad czlonu calkujacego w komende (-1..1)
+    i_limit: 0.1              # anty-windup: maks. wklad czlonu calkujacego w komende (-1..1); bylo 0.3 - calka rozwalala sterowanie
     out_limit: 0.6            # maks. korekta regulatora na os; reszta zakresu zostaje dla pilota
     # PID: [kp, ki, kd]; wyjscie w jednostkach komendy -1..1 na stopien bledu (kurs/poziom) lub na metr (glebokosc)
-    gains_yaw:   [0.02, 0.002, 0.004]
-    gains_roll:  [0.02, 0.002, 0.004]
-    gains_pitch: [0.02, 0.002, 0.004]
+    # ki = 0 dla katow (2026-11-05): calka nawijala sie na stojacym/przechylonym pojezdzie (roll I 0.05 -> 0.22 w kilka minut)
+    # i rozwalala sterowanie. Wypor sam prostuje roll/pitch, a kurs trzyma P+D; ewentualny staly blad - wrocimy przy kaskadzie.
+    gains_yaw:   [0.02, 0.0, 0.004]
+    gains_roll:  [0.02, 0.0, 0.004]
+    gains_pitch: [0.02, 0.0, 0.004]
     gains_depth: [1.5, 0.2, 0.5]
