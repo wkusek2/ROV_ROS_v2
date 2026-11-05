@@ -59,7 +59,7 @@ class SimPico(Node):
         self.create_subscription(String, "/rov/sim/leak", lambda m: setattr(self, "leak", int(m.data) | (int(m.data) << 4)), 10)  # test: "1","2","3","0"
         self.create_service(Trigger, "/rov/depth/zero", lambda rq, rs: self._ok(rs, "sim: p0 ustawione"))
         self.create_service(Trigger, "/rov/imu/calibrate", lambda rq, rs: self._ok(rs, "sim: kalibracja zyro"))
-        self.create_timer(0.02, self.step_imu)      # 50 Hz
+        self.create_timer(0.005, self.step_imu)     # 200 Hz jak Pico
         self.create_timer(0.05, self.pub_tlm)       # 20 Hz
         self.create_timer(0.1, self.pub_press)      # 10 Hz
         self.create_timer(0.5, self.pub_bms)        # 2 Hz
@@ -105,7 +105,7 @@ class SimPico(Node):
         import numpy as np
         if not hasattr(self, "B"):
             self._init_dyn()
-        dt = 0.02
+        dt = 0.005
         t = self.thr if time.time() - self.cmd_t < 0.5 else [0.0] * 8
         from rov_control import allocation as al
         f = np.zeros(8)

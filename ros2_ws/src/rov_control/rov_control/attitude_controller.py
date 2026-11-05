@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Orientacja z IMU + regulator do wektora zadanego (kurs / poziom / glebokosc). Siedzi miedzy GUI a mikserem.
 
-Wejscia:  /rov/imu (sensor_msgs/Imu, surowe zyro rad/s i akcel m/s2 w osiach CZUJNIKA)
+Wejscia:  /rov/imu (sensor_msgs/Imu, 200 Hz, surowe zyro rad/s i akcel m/s2 w osiach CZUJNIKA)
           /rov/depth (Float32, m, + w dol)
           /rov/cmd_vel_pilot (Twist, -1..1 od pilota: GUI/pad)      <- GUI publikuje TU
           /rov/ctrl/mode String JSON {"yaw_hold": bool, "level": bool, "depth_hold": bool}
@@ -160,7 +160,9 @@ class AttitudeController(Node):
             w, x, y, z = q
             v = np.array([2 * (x * z - w * y), 2 * (w * x + y * z), w * w - x * x - y * y + z * z])
             e = np.cross(a, v)                # blad (a x v)
-            g = g + self.acc_w / max(dt, 1e-3) * 0.5 * e   # proporcjonalna korekta (Mahony kp ~ acc_w/dt)
+            # korekta proporcjonalna niezalezna od czestotliwosci IMU: acc_weight = udzial na probke przy 50 Hz
+            # (stala czasowa ~ 0.04 s / acc_weight); przy 200 Hz ta sama stala czasowa, nie 4x szybsza
+            g = g + self.acc_w / 0.02 * 0.5 * e
         # calkowanie kwaternionu
         half = 0.5 * dt * g
         dq = np.array([1.0, half[0], half[1], half[2]])

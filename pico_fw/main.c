@@ -3,7 +3,7 @@
 //  core 1: petla DShot 1 kHz (8x bidirectional DShot, PIO) + rotacyjne zadanie telemetrii KISS
 //  core 0: micro-ROS (rclc executor), KISS z UART0/UART1, ADC pradu, IMU LSM6DSO32, MS5837/MS5803
 //
-//  Publikuje:   /rov/imu (sensor_msgs/Imu, 50 Hz, best effort)
+//  Publikuje:   /rov/imu (sensor_msgs/Imu, 200 Hz, best effort; czujnik 208 Hz na DRDY)
 //               /rov/imu/temperature (sensor_msgs/Temperature, 5 Hz)
 //               /rov/pressure/ms5837, /rov/pressure/ms5803 (sensor_msgs/FluidPressure, 10 Hz)
 //               /rov/temperature/ms5837, /rov/temperature/ms5803 (sensor_msgs/Temperature, 10 Hz)
@@ -61,7 +61,7 @@ static const uint8_t MOTOR_PINS[N_MOTORS] = { 9, 10, 11, 12, 16, 17, 18, 19 };
 #define DSHOT_LOOP_US    1000   // 1 kHz
 #define TLM_REQ_MS       10     // co ile ms zadanie telemetrii KISS na ESC (rotacja 4 silnikow)
 #define CMD_TIMEOUT_MS   500    // failsafe: brak ThrusterCommand
-#define IMU_PUB_MS       20
+#define IMU_PUB_MS       5      // 200 Hz (bylo 20 = 50 Hz); IMU_TEMP_PUB_MS musi byc wielokrotnoscia
 #define IMU_TEMP_PUB_MS  200
 #define PRESS_PUB_MS     100
 #define TLM_PUB_MS       50

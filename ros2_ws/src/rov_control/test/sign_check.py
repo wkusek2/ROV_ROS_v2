@@ -153,7 +153,7 @@ def simulate(gain, legacy=False, T=12.0, dist=(0, 0, 0), heave=None, mismatch=No
     while t < T:
         SIMT[0] = t
         if t >= next_imu:
-            acm.AttitudeController.on_imu(c, imu_msg(R, w)); next_imu += 0.02
+            acm.AttitudeController.on_imu(c, imu_msg(R, w)); next_imu += 0.005   # IMU 200 Hz jak Pico
         if t >= next_ctrl:
             hv = heave[2] if heave and heave[0] <= t < heave[1] else 0.0
             c.pilot = [0.0, 0.0, hv, 0.0, 0.0, 0.0]; c.pilot_t = t

@@ -8,7 +8,8 @@ attitude_controller:
     # Po przemontowaniu IMU zmierzyc ponownie: plasko roll=pitch=0, dziob w gore -> pitch +, prawa w dol -> roll +.
     imu_axes: "-z,x,-y"
     imu_trim_deg: [28.8, 0.0, 0.0]   # [roll, pitch, yaw] montazu IMU wzgledem kadluba [deg]
-    acc_weight: 0.02          # sila korekty akcelerometrem (0.005 wolno/gladko .. 0.05 szybko)
+    acc_weight: 0.02          # sila korekty akcelerometrem (0.005 wolno/gladko .. 0.05 szybko); stala czasowa ~0.04 s/acc_weight = 2 s,
+                              # niezalezna od czestotliwosci IMU (od 2026-11-05 IMU 200 Hz)
     rate_hz: 20.0
     pilot_timeout_s: 0.5
     deadband: 0.08            # |pilot| powyzej -> regulator tej osi odpuszcza i po puszczeniu przejmuje biezacy stan
