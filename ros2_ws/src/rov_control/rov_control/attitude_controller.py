@@ -71,6 +71,28 @@ class PID:
         return u
 
 
+def imu_rotation(axes, trim_deg=(0.0, 0.0, 0.0)):
+    """body = R @ sensor: najpierw zamiana osi (imu_axes), potem obrot montazu imu_trim_deg = [roll, pitch, yaw] [deg]
+    wokol osi ciala FLU (R = Rz Ry Rx Raxes). Trim dla IMU zamontowanego krzywo (nie wzdluz osi kadluba)."""
+    rx, ry, rz = (math.radians(float(v)) for v in trim_deg)
+    Rx = np.array([[1, 0, 0], [0, math.cos(rx), -math.sin(rx)], [0, math.sin(rx), math.cos(rx)]])
+    Ry = np.array([[math.cos(ry), 0, math.sin(ry)], [0, 1, 0], [-math.sin(ry), 0, math.cos(ry)]])
+    Rz = np.array([[math.cos(rz), -math.sin(rz), 0], [math.sin(rz), math.cos(rz), 0], [0, 0, 1]])
+    return Rz @ Ry @ Rx @ axis_map(axes)
+
+
+def load_imu_rotation(path=None):
+    """R z config/attitude.yaml (imu_axes + imu_trim_deg) - dla sim_pico i testow, zeby uzywaly tego samego co regulator."""
+    import yaml
+    if path is None:
+        from ament_index_python.packages import get_package_share_directory
+        import os
+        path = os.path.join(get_package_share_directory("rov_control"), "config", "attitude.yaml")
+    with open(path) as f:
+        p = yaml.safe_load(f)["attitude_controller"]["ros__parameters"]
+    return imu_rotation(p.get("imu_axes", "x,y,z"), p.get("imu_trim_deg", [0.0, 0.0, 0.0]))
+
+
 def wrap(a):
     return (a + 180.0) % 360.0 - 180.0
 
@@ -79,14 +101,14 @@ class AttitudeController(Node):
     def __init__(self):
         super().__init__("attitude_controller")
         p = self.declare_parameter
-        p("imu_axes", "x,z,-y"); p("acc_weight", 0.02); p("rate_hz", 20.0); p("pilot_timeout_s", 0.5)
+        p("imu_axes", "-z,x,-y"); p("imu_trim_deg", [0.0, 0.0, 0.0]); p("acc_weight", 0.02); p("rate_hz", 20.0); p("pilot_timeout_s", 0.5)
         p("gains_yaw", [0.02, 0.002, 0.004]); p("gains_roll", [0.02, 0.002, 0.004]); p("gains_pitch", [0.02, 0.002, 0.004])
         p("gains_depth", [1.5, 0.2, 0.5])          # [1/m, 1/(m s), s/m]
         p("deadband", 0.08)                        # gdy |pilot| > deadband na osi -> regulator tej osi odpuszcza, setpoint = aktualny
         p("i_limit", 0.3)                          # maks. wklad calki w wyjscie (-1..1) - blokada windup
         p("out_limit", 0.6)                        # maks. korekta regulatora na os (reszta zostaje dla pilota)
         g = lambda k: self.get_parameter(k).value  # noqa: E731
-        self.R = axis_map(g("imu_axes")); self.acc_w = float(g("acc_weight")); self.deadband = float(g("deadband"))
+        self.R = imu_rotation(g("imu_axes"), list(g("imu_trim_deg"))); self.acc_w = float(g("acc_weight")); self.deadband = float(g("deadband"))
         self.pilot_timeout = float(g("pilot_timeout_s"))
         il, ol = float(g("i_limit")), float(g("out_limit"))
         self.pid = {k: PID(*g(f"gains_{k}"), out_lim=ol, i_lim=il) for k in ("yaw", "roll", "pitch", "depth")}
@@ -116,7 +138,7 @@ class AttitudeController(Node):
         self.pub_dbg = self.create_publisher(String, "/rov/debug/ctrl", 10)
         self.create_timer(1.0 / float(g("rate_hz")), self.tick)
         self.create_timer(0.2, self.publish_status)
-        self.get_logger().info(f"imu_axes={g('imu_axes')}  regulator: {list(self.pid)}")
+        self.get_logger().info(f"imu_axes={g('imu_axes')} imu_trim_deg={list(g('imu_trim_deg'))}  regulator: {list(self.pid)}")
 
     # ---- IMU / filtr ----
     def on_imu(self, m: Imu):

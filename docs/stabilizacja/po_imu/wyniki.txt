@@ -1,0 +1,46 @@
+TESTY ZNAKOW (obecny kod)
+  OK  pilot_pitch  moment M = +25.0 Nm  ->  dziob idzie W GORE
+  OK  pilot_roll   moment K = +7.4 Nm  ->  prawa burta idzie W DOL
+  OK  pilot_yaw    moment N = -39.8 Nm  ->  dziob idzie W LEWO
+  OK  tilt_roll    regulator odczytal roll = +9.8 st. (+ = prawa w dol) | K = -2.93 Nm -> prawa burta wraca W GORE (dobrze)
+  OK  tilt_pitch   regulator odczytal pitch = +9.8 st. (+ = dziob w gore) | M = -9.86 Nm -> dziob wraca W DOL (dobrze)
+
+ZAMKNIETA PETLA (max |kat|, kat koncowy, koniec symulacji; koniec < T = wywrotka > 85 st.)
+  roll        STARY  gain 0.3 roll   max   38.9  koniec    0.6  t_end  12.0 s
+  roll        STARY  gain 1.0 roll   max   85.1  koniec   85.1  t_end   2.6 s
+  roll        OBECNY gain 0.3 roll   max   27.4  koniec   -0.4  t_end  12.0 s
+  roll        OBECNY gain 1.0 roll   max   17.7  koniec   -0.3  t_end  12.0 s
+  pitch       STARY  gain 0.3 pitch  max   50.9  koniec   35.0  t_end  12.0 s
+  pitch       STARY  gain 1.0 pitch  max   85.8  koniec   85.8  t_end   1.8 s
+  pitch       OBECNY gain 0.3 pitch  max   20.5  koniec   -0.4  t_end  12.0 s
+  pitch       OBECNY gain 1.0 pitch  max    9.6  koniec   -0.1  t_end  12.0 s
+  yaw         STARY  gain 0.3 yaw    max   23.2  koniec    1.0  t_end  12.0 s
+  yaw         STARY  gain 1.0 yaw    max   12.1  koniec    0.2  t_end  12.0 s
+  yaw         OBECNY gain 0.3 yaw    max   13.2  koniec    0.2  t_end  12.0 s
+  yaw         OBECNY gain 1.0 yaw    max    5.2  koniec    0.1  t_end  12.0 s
+  zanurzanie  STARY  gain 0.3 roll   max    4.5  koniec    3.1  t_end  12.0 s
+  zanurzanie  STARY  gain 0.3 pitch  max   66.7  koniec  -32.1  t_end  12.0 s
+  zanurzanie  STARY  gain 0.3 yaw    max    2.1  koniec   -0.4  t_end  12.0 s
+  zanurzanie  STARY  gain 1.0 roll   max    6.5  koniec    4.0  t_end   2.4 s
+  zanurzanie  STARY  gain 1.0 pitch  max   85.3  koniec  -85.3  t_end   2.4 s
+  zanurzanie  STARY  gain 1.0 yaw    max   45.4  koniec   45.4  t_end   2.4 s
+  zanurzanie  OBECNY gain 0.3 roll   max    0.6  koniec   -0.1  t_end  12.0 s
+  zanurzanie  OBECNY gain 0.3 pitch  max    0.9  koniec    0.2  t_end  12.0 s
+  zanurzanie  OBECNY gain 0.3 yaw    max    1.4  koniec   -0.4  t_end  12.0 s
+  zanurzanie  OBECNY gain 1.0 roll   max    1.0  koniec   -0.3  t_end  12.0 s
+  zanurzanie  OBECNY gain 1.0 pitch  max    1.1  koniec    0.3  t_end  12.0 s
+  zanurzanie  OBECNY gain 1.0 yaw    max    1.4  koniec   -0.4  t_end  12.0 s
+
+MODEL CIAGU: tau faktyczne [X Y Z K M N] vs plan miksera (bez regulatora)
+  Pilot: czyste ZANURZANIE heave -0.6    mikser linear, pedniki T200            fakt [-11.96, 0.0, 45.79, 0.0, 0.0, -0.0]  plan [-0.0, 0.0, 54.88, 0.0, 0.0, -0.0]
+  Pilot: czyste ZANURZANIE heave -0.6    mikser linear, pedniki podrobki 80-100% fakt [-10.48, 1.84, 41.79, 0.14, -0.38, -0.7]  plan [-0.0, 0.0, 54.88, 0.0, 0.0, -0.0]
+  Pilot: czyste ZANURZANIE heave -0.6    mikser t200, pedniki T200              fakt [0.0, 0.0, 73.0, 0.0, 0.0, -0.0]  plan [-0.0, 0.0, 73.0, 0.0, 0.0, -0.0]
+  Pilot: czyste ZANURZANIE heave -0.6    mikser t200, pedniki podrobki 80-100%  fakt [0.71, 2.81, 66.66, 0.25, -0.65, -1.27]  plan [-0.0, 0.0, 73.0, 0.0, 0.0, -0.0]
+  Pilot: czysty YAW +0.4                 mikser linear, pedniki T200            fakt [-6.36, 0.0, 0.0, -0.0, 0.0, -15.62]  plan [0.0, 0.0, -0.0, -0.0, 0.0, -23.9]
+  Pilot: czysty YAW +0.4                 mikser linear, pedniki podrobki 80-100% fakt [-4.32, -0.44, 0.62, 0.0, 0.42, -14.22]  plan [0.0, 0.0, -0.0, -0.0, 0.0, -23.9]
+  Pilot: czysty YAW +0.4                 mikser t200, pedniki T200              fakt [0.0, 0.0, -0.0, -0.0, 0.0, -31.8]  plan [0.0, 0.0, -0.0, -0.0, 0.0, -31.8]
+  Pilot: czysty YAW +0.4                 mikser t200, pedniki podrobki 80-100%  fakt [3.03, -0.98, 1.3, 0.03, 0.83, -29.04]  plan [0.0, 0.0, -0.0, -0.0, 0.0, -31.8]
+  Pilot: SURGE +0.5 + heave -0.3         mikser linear, pedniki T200            fakt [119.56, 0.0, 34.81, 0.0, 0.0, -0.0]  plan [136.76, 0.0, 27.44, 0.0, 0.0, -0.0]
+  Pilot: SURGE +0.5 + heave -0.3         mikser linear, pedniki podrobki 80-100% fakt [109.51, 0.63, 32.01, 0.29, -0.6, -1.57]  plan [136.76, 0.0, 27.44, 0.0, 0.0, -0.0]
+  Pilot: SURGE +0.5 + heave -0.3         mikser t200, pedniki T200              fakt [176.01, -0.0, 36.5, 0.0, 0.0, -0.0]  plan [176.01, 0.0, 36.5, 0.0, 0.0, -0.0]
+  Pilot: SURGE +0.5 + heave -0.3         mikser t200, pedniki podrobki 80-100%  fakt [161.07, 0.36, 33.67, 0.38, -0.75, -2.06]  plan [176.01, 0.0, 36.5, 0.0, 0.0, -0.0]

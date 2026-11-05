@@ -1,9 +1,13 @@
 # Regulator orientacji / glebokosci (rov_control/attitude_controller.py)
 attitude_controller:
   ros__parameters:
-    # Mapowanie osi czujnika -> cialo FLU (x przod, y lewo, z gora). IMU lezy na boku (grawitacja na -Y czujnika),
-    # wiec cialo_z = -sensor_y. Ktora os czujnika patrzy do przodu - zweryfikowac w GUI (pochyl dziob w gore -> pitch +).
-    imu_axes: "x,z,-y"
+    # Mapowanie osi czujnika -> cialo FLU (x przod, y lewo, z gora): body = Rz Ry Rx (trim) @ Raxes @ sensor.
+    # Zmierzone na pojezdzie 2026-11-05 (dziob w gore / prawa burta w dol, docs/stabilizacja/imu_osie/):
+    #   przod = -Z czujnika, gora ~ -Y czujnika, a IMU obrocone o 28.8 st. wokol osi przod-tyl
+    #   (plasko: acc = [4.68, -8.52, 0.05] m/s2). Bylo "x,z,-y" bez trimu -> pitch pokazywal sie jako roll.
+    # Po przemontowaniu IMU zmierzyc ponownie: plasko roll=pitch=0, dziob w gore -> pitch +, prawa w dol -> roll +.
+    imu_axes: "-z,x,-y"
+    imu_trim_deg: [28.8, 0.0, 0.0]   # [roll, pitch, yaw] montazu IMU wzgledem kadluba [deg]
     acc_weight: 0.02          # sila korekty akcelerometrem (0.005 wolno/gladko .. 0.05 szybko)
     rate_hz: 20.0
     pilot_timeout_s: 0.5

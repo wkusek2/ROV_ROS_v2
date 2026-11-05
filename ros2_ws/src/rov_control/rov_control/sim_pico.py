@@ -134,10 +134,13 @@ class SimPico(Node):
         m = Imu()
         m.header.stamp = self.get_clock().now().to_msg(); m.header.frame_id = "imu_link"
         m.orientation.w, m.orientation.x, m.orientation.y, m.orientation.z = self.q
-        # Pico wysyla osie CZUJNIKA; regulator mapuje "x,z,-y" -> wyslij tak, zeby po mapowaniu wyszlo cialo: sensor = R^T body
-        # body = (sx, sz, -sy) => sx = bx, sz = by, sy = -bz
-        m.angular_velocity.x, m.angular_velocity.y, m.angular_velocity.z = wx, -wz, wy
-        m.linear_acceleration.x, m.linear_acceleration.y, m.linear_acceleration.z = acc[0], -acc[2], acc[1]
+        # Pico wysyla osie CZUJNIKA: sensor = R^T body, R z config/attitude.yaml (imu_axes + imu_trim_deg) - jak regulator
+        if not hasattr(self, "R_imu"):
+            from rov_control.attitude_controller import load_imu_rotation
+            self.R_imu = load_imu_rotation()
+        gs = self.R_imu.T @ np.array([wx, wy, wz]); as_ = self.R_imu.T @ np.array(acc)
+        m.angular_velocity.x, m.angular_velocity.y, m.angular_velocity.z = map(float, gs)
+        m.linear_acceleration.x, m.linear_acceleration.y, m.linear_acceleration.z = map(float, as_)
         self.p_imu.publish(m)
 
     def pub_tlm(self):

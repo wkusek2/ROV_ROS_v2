@@ -8,7 +8,7 @@ filtr + PID AttitudeController) spiety z NIEZALEZNA fizyka bryly sztywnej. Wynik
 Fizyka nie uzywa konwencji znakow z repo. Jedyne zalozenia:
   - pojazd FRD (x przod, y prawo, z dol), swiat NED (z w dol); moment tau = r x F, I dw/dt = tau - w x Iw - D w
   - "prawa burta w dol" / "dziob w gore" / "dziob w lewo" sprawdzane GEOMETRYCZNIE (polozenie punktow kadluba)
-  - IMU zamontowane zgodnie z imu_axes z config/attitude.yaml ("x,z,-y"): to jedyne zalozenie o sprzecie
+  - IMU zamontowane zgodnie z imu_axes + imu_trim_deg z config/attitude.yaml: to jedyne zalozenie o sprzecie
 "Stary kod" (przed poprawka 2026-11) jest emulowany odwroceniem K i M w mikserze - dla petli rownowazne
 staremu regulatorowi (roll i czlon D z odwroconym znakiem) + staremu mikserowi (M = -pitch). Emulacja daje te same
 liczby co uruchomienie starego kodu (docs/stabilizacja/przed/).
@@ -30,8 +30,11 @@ import rov_control.thruster_mixer as tmm  # noqa: E402
 from sensor_msgs.msg import Imu  # noqa: E402
 
 G = 9.81
-IMU_AXES = "x,z,-y"
-GAINS = {"yaw": [0.02, 0.002, 0.004], "roll": [0.02, 0.002, 0.004], "pitch": [0.02, 0.002, 0.004], "depth": [1.5, 0.2, 0.5]}
+IMU_CFG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config", "attitude.yaml")
+R_IMU = acm.load_imu_rotation(IMU_CFG)    # imu_axes + imu_trim_deg - to samo co regulator na pojezdzie
+import yaml  # noqa: E402
+_P = yaml.safe_load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config", "attitude.yaml")))["attitude_controller"]["ros__parameters"]
+GAINS = {k: list(_P[f"gains_{k}"]) for k in ("yaw", "roll", "pitch", "depth")}   # nastawy jak na pojezdzie
 LEGACY = {"pitch": ("M", -1), "roll": ("K", -1)}
 
 
@@ -84,8 +87,8 @@ class Pub:
 
 def make_ctrl(level=True, yaw_hold=True):
     c = acm.AttitudeController.__new__(acm.AttitudeController)
-    c.R = acm.axis_map(IMU_AXES); c.acc_w = 0.02; c.deadband = 0.08; c.pilot_timeout = 0.5
-    c.pid = {k: acm.PID(*g, out_lim=0.6, i_lim=0.3) for k, g in GAINS.items()}
+    c.R = R_IMU; c.acc_w = 0.02; c.deadband = 0.08; c.pilot_timeout = 0.5
+    c.pid = {k: acm.PID(*g, out_lim=float(_P['out_limit']), i_lim=float(_P['i_limit'])) for k, g in GAINS.items()}
     c.q = np.array([1.0, 0, 0, 0]); c.q_ref = np.array([1.0, 0, 0, 0]); c.yaw_ref = 0.0
     c.gyro_b = np.zeros(3); c.acc_b = np.zeros(3); c.last_imu = None; c.imu_t = 0.0; c.n_imu = 0
     c.rpy = [0.0, 0.0, 0.0]; c.depth = None; c.depth_t = 0.0
@@ -127,7 +130,7 @@ def geo_angles(R):
 
 
 def imu_msg(R, w_frd):
-    Rmap = acm.axis_map(IMU_AXES)
+    Rmap = R_IMU
     f_frd = R.T @ np.array([0, 0, -G])
     gs = Rmap.T @ (FLU @ w_frd); as_ = Rmap.T @ (FLU @ f_frd)
     m = Imu()
