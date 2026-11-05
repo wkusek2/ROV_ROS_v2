@@ -256,7 +256,7 @@ def cmd_export(a):
     os.makedirs(out, exist_ok=True)
     for topic, df in dfs.items():
         p = os.path.join(out, topic.strip("/").replace("/", "__") + ".csv")
-        df.to_csv(p, index=False, float_format="%.6g")
+        df.to_csv(p, index=False, float_format="%.15g")   # czas uniksowy potrzebuje ~13 cyfr
         print(f"{p}  ({len(df)} wierszy, {len(df.columns)} kolumn)")
 
 
